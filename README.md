@@ -4,6 +4,8 @@ Agent skills from [Altair AI](https://altairworld.com): `altair-research` for st
 
 Docs site: [altair-world.github.io/altair-skills](https://altair-world.github.io/altair-skills/), built by GitHub Pages from this README on `main`.
 
+Both skills are for dated published research and market readings. They have no brokerage access or live prices and do not provide personal buy/sell advice or position sizing. For those requests, they explain the limitation without fetching research or web-searching a substitute, and offer dated research only if requested.
+
 ## altair-research
 
 The latest AI research on about 70 US stocks and ETFs: the **SPY** (S&P 500), **QQQ** (Nasdaq-100), **SOXX** (semiconductors) and **XBI** (biotech) index ETFs, refreshed weekly, and stocks such as NVDA, AAPL, MSFT, TSLA, AVGO and META.

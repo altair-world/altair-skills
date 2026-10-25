@@ -1,12 +1,16 @@
 ---
 name: altair-market
-description: Market breadth and factor indicator readings from altairworld.com's free public MCP server. Returns the percentage of S&P 500, Nasdaq-100 and SOX constituents above the 20-day SMA, S&P 500 sector breadth, recent breadth history, ten factor indicators and TD Sequential 9 (daily and weekly) on SPX/NDX/SOX. Use when the user asks about market breadth, sector breadth, semiconductor breadth, factor indicator readings, "is the market overbought/oversold", "how broad is the rally", or TD Sequential setups. No API key. Readings for information only, not financial advice.
+description: Market breadth and factor indicator readings from altairworld.com's free public MCP server. Returns the percentage of S&P 500, Nasdaq-100 and SOX constituents above the 20-day SMA, S&P 500 sector breadth, recent breadth history, ten factor indicators and TD Sequential 9 (daily and weekly) on SPX/NDX/SOX. Use when the user asks about market breadth, sector breadth, semiconductor breadth, factor indicator readings, "is the market overbought/oversold", "how broad is the rally", or TD Sequential setups. Not for live or real-time quotes, placing trades or brokerage actions, personal position sizing or buy/sell advice. For these, explain plugin limits without tools, web search, order steps, position sizes or personal questions; offer dated research only on request. No API key. Readings for information only, not financial advice.
 license: MIT
 ---
 
 # Altair market
 
 Fetches the newest market readings from <https://altairworld.com/indicators> through Altair's free public MCP endpoint (`https://altairworld.com/mcp/free`): `get_market_breadth` for index and sector breadth, and `get_market_indicators` for factor indicators and TD Sequential 9. No key, no sign-in, no MCP setup. Every call returns current data without updating this skill.
+
+## Out of scope
+
+For trade execution, brokerage actions, personal position sizing or allocation of the user's money, personal buy/sell advice, or live quotes, call no Altair tools and do not web-search a substitute. Say plainly that this plugin has no brokerage access, no live prices and no personal financial advice. Do not give order-entry steps, hypothetical position sizes or ask for personal financial details. Offer dated published research or market readings only if the user wants them; wait for that request before fetching them.
 
 ## Data source and trust
 
@@ -36,8 +40,8 @@ If the Altair MCP server is already connected, call `get_market_breadth { days? 
 ## Answering
 
 1. Lead with the reading date, e.g. "2026-10-23: 70% of S&P 500 constituents are above their 20-day SMA." State each index's date if they differ.
-2. Values are as of the last available close, not live quotes. During trading hours the indicators tool can include the current session, whose close may not be final; do not present it as a completed closing session.
-3. Breadth values are percentages, not stock counts. Sector `stocks` is the constituent count; `above` is a percentage. The server's `total` is the sum of eleven rounded sector percentages, neither a stock count nor a market-wide percentage; use `all` for S&P 500 breadth.
+2. Always state that readings are as of the last available close, not live quotes. During trading hours the indicators tool can include the current session, whose close may not be final; do not present it as a completed closing session.
+3. When breadth is asked, include the full S&P 500 sector table, not just selected sectors. Always state that breadth values are percentages, not stock counts. Sector `stocks` is the constituent count; `above` is a percentage. The server's `total` is the sum of eleven rounded sector percentages, neither a stock count nor a market-wide percentage; use `all` for S&P 500 breadth.
 4. SPX, NDX and SOX are price-only indices, without dividends; they are not SPY, QQQ or SOXX ETF total returns.
-5. Quote the indicator reading and rule together. Bullish/neutral/bearish labels describe rules, not forecasts; several are contrarian. SOX implied volatility uses Cboe's semiconductor ETF index VXSMH. A TD "buy" or "sell" setup names a count, not an instruction. Preserve unavailable readings and do not invent missing data or history.
+5. Quote the indicator reading and rule together. Bullish/neutral/bearish labels describe rules, not forecasts; several are contrarian. SOX implied volatility uses Cboe's semiconductor ETF index VXSMH. For TD Sequential, include the count and its rule: consecutive closes below (buy setup) or above (sell setup) the close four bars earlier, using daily or weekly bars as labeled. A TD "buy" or "sell" setup names a count, not an instruction. Preserve unavailable readings and do not invent missing data or history.
 6. End with the disclaimer: market readings for information only, not financial or investment advice. Never turn these readings into buy/sell instructions or position sizes for the user.
