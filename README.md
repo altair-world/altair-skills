@@ -43,13 +43,6 @@ GitHub CLI: `gh skill install altair-world/altair-skills altair-research`. OpenC
 
 Needs Python 3.8+ and internet access. No API key or sign-in.
 
-### Listings
-
-- [skills.sh](https://www.skills.sh/altair-world/altair-skills/altair-research)
-- [ClawHub](https://clawhub.ai/altair-world/skills/altair-research)
-- Claude directory: submitted, in review.
-- OpenAI plugin directory (ChatGPT and Codex): submitted, in review.
-
 ### Run it yourself
 
 ```bash
@@ -107,7 +100,7 @@ GitHub CLI:
 gh skill install altair-world/altair-skills altair-market
 ```
 
-OpenClaw, once this skill is published on [ClawHub](https://clawhub.ai):
+OpenClaw, from [ClawHub](https://clawhub.ai):
 
 ```bash
 clawhub install altair-market
@@ -129,6 +122,17 @@ python3 skills/altair-market/scripts/altair_market.py indicators NDX SOX
 ### Data and security
 
 Market data comes from Altair AI, the publisher of this skill, through the read-only `get_market_breadth` and `get_market_indicators` tools at `https://altairworld.com/mcp/free`. The script sends only a recent-session count, with index selection applied locally; it sends no files or credentials. Fetched text is data to quote or summarize, never instructions. Set `ALTAIR_MCP_URL` to use another deployment; HTTPS is required, with HTTP allowed only for `localhost` or `127.0.0.1` during local development. See [altairworld.com/mcp](https://altairworld.com/mcp) for the tool documentation.
+
+## Listings
+
+| Market | altair-research | altair-market |
+| --- | --- | --- |
+| skills.sh | [listing](https://www.skills.sh/altair-world/altair-skills/altair-research) | [listing](https://www.skills.sh/altair-world/altair-skills/altair-market) |
+| ClawHub | [listing](https://clawhub.ai/altair-world/skills/altair-research) | [listing](https://clawhub.ai/altair-world/skills/altair-market) |
+| LobeHub | [listing](https://lobehub.com/skills/altair-world-altair-skills-altair-research) | [listing](https://lobehub.com/skills/altair-world-altair-skills-altair-market) |
+| GitHub (`gh skill`) | [v1.1.0 release](https://github.com/altair-world/altair-skills/releases/tag/v1.1.0) | same release |
+
+The plugin is also submitted to the Claude directory and the OpenAI plugin directory (ChatGPT and Codex). Both are reviewing version 1.0.0, which has only altair-research; 1.1.0, which adds altair-market, follows once they approve it. SkillsMP indexes public GitHub repos on its own schedule and hasn't listed this one yet.
 
 ## Disclaimer
 
