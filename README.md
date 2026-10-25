@@ -132,9 +132,9 @@ Market data comes from Altair AI, the publisher of this skill, through the read-
 | skills.sh | [listing](https://www.skills.sh/altair-world/altair-skills/altair-research) | [listing](https://www.skills.sh/altair-world/altair-skills/altair-market) |
 | ClawHub | [listing](https://clawhub.ai/altair-world/skills/altair-research) | [listing](https://clawhub.ai/altair-world/skills/altair-market) |
 | LobeHub | [listing](https://lobehub.com/skills/altair-world-altair-skills-altair-research) | [listing](https://lobehub.com/skills/altair-world-altair-skills-altair-market) |
-| GitHub (`gh skill`) | [v1.1.0 release](https://github.com/altair-world/altair-skills/releases/tag/v1.1.0) | same release |
+| GitHub (`gh skill`) | [v1.1.1 release](https://github.com/altair-world/altair-skills/releases/tag/v1.1.1) | same release |
 
-The plugin is also submitted to the Claude directory and the OpenAI plugin directory (ChatGPT and Codex). Both are reviewing version 1.0.0, which has only altair-research; 1.1.0, which adds altair-market, follows once they approve it. SkillsMP indexes public GitHub repos on its own schedule and hasn't listed this one yet.
+The plugin is also submitted to the Claude directory and the OpenAI plugin directory (ChatGPT and Codex). Both are reviewing version 1.0.0, which has only altair-research; 1.1.1, which adds altair-market, follows once they approve it. SkillsMP indexes public GitHub repos on its own schedule and hasn't listed this one yet.
 
 ## Disclaimer
 
