@@ -21,9 +21,9 @@ python3 scripts/altair_research.py report <report-url> --section risk
 ```
 
 - `tickers` lists every covered ticker with its report count, index ETFs first.
-- `latest [TICKER ...]` prints one block per ticker for its newest analysis date: a table with each model's final rating, report-time close, target, target vs close, confidence and horizon, then each model's executive summary. Tickers may be space- or comma-separated, any case, with or without `$`. With no tickers it covers the four index ETFs. `--summary-chars N` sets summary length (default 600).
+- `latest [TICKER ...]` prints one block per ticker for its newest analysis date: a table with each model's final rating, report-time close, target, target vs close, confidence and horizon, then each model's executive summary. Tickers may be space- or comma-separated, any case, with or without `$`. With no ticker arguments it covers the four index ETFs; an explicitly empty ticker list is an input error. `--date` requires a valid `YYYY-MM-DD` date. `--summary-chars N` sets summary length (default 600); 0 hides summaries, and negative values are rejected.
 - `report` prints one section of a report URL from `latest`: `pm` (portfolio manager, default), `analysts` (technical, sentiment, news, fundamentals), `research` (bull/bear debate), `trader`, `risk`, or `full` (150–300 KB; avoid unless asked).
-- An uncovered ticker prints "No research for …"; a `--date` without reports lists the recent analysis dates. A model whose report could not be read shows as "unavailable". Exit status 1 means the server was unreachable or every ticker failed; say so instead of guessing.
+- An uncovered ticker prints "No research for …" and points to `tickers`; an invalid report URL points to `latest TICKER` for report URLs; a `--date` without reports lists the recent analysis dates. A model whose report could not be read shows as "unavailable". Exit status 1 means the server was unreachable or every ticker failed; say so instead of guessing.
 
 If the Altair MCP server is already connected, call its `get_research_decisions { ticker, date? }` tool for the same table data, and `read_research_report` only when the user wants a model's full reasoning (150–300 KB per report).
 

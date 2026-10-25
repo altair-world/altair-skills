@@ -92,6 +92,10 @@ def call_tool(name, arguments):
     result = message["result"]
     if result.get("isError"):
         detail = " ".join(part.get("text", "") for part in result.get("content", []))
+        detail = detail.replace("Use list_research_reports to see covered tickers.",
+                                "Run `tickers` to see covered tickers.")
+        detail = detail.replace("Use a url returned by list_research_reports.",
+                                "Use a report URL from `latest TICKER`.")
         raise ToolError(detail.strip() or "{}: tool error".format(name))
     if result.get("structuredContent") is not None:
         return result["structuredContent"]
@@ -164,8 +168,9 @@ def render_ticker(ticker, research, summary_chars):
         if "error" in row:
             lines.append("| [{}]({}) | unavailable: {} | | | | | |".format(row["model"], row["url"], row["error"]))
     lines.append("")
-    for row in read:
-        lines.append("- **{}**: {}".format(row["model"], short(row["summary"], summary_chars) or "no summary"))
+    if summary_chars:
+        for row in read:
+            lines.append("- **{}**: {}".format(row["model"], short(row["summary"], summary_chars) or "no summary"))
     return "\n".join(lines) + "\n"
 
 
@@ -235,9 +240,21 @@ def report(args):
 
 def analysis_date(value):
     try:
+        if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
+            raise ValueError
         return datetime.date.fromisoformat(value).isoformat()
     except ValueError:
         raise argparse.ArgumentTypeError("expected a YYYY-MM-DD date, got {!r}".format(value))
+
+
+def summary_length(value):
+    try:
+        length = int(value)
+        if length >= 0:
+            return length
+    except ValueError:
+        pass
+    raise argparse.ArgumentTypeError("expected a non-negative integer, got {!r}".format(value))
 
 
 def main():
@@ -249,14 +266,16 @@ def main():
     latest_parser.add_argument("tickers", nargs="*",
                                help="tickers, space- or comma-separated (default: {})".format(" ".join(INDEX_TICKERS)))
     latest_parser.add_argument("--date", type=analysis_date, help="analysis date YYYY-MM-DD instead of the newest")
-    latest_parser.add_argument("--summary-chars", type=int, default=SUMMARY_CHARS,
-                               help="executive summary length per model (default %(default)s)")
+    latest_parser.add_argument("--summary-chars", type=summary_length, default=SUMMARY_CHARS,
+                               help="executive summary length per model; 0 hides summaries (default %(default)s)")
     latest_parser.set_defaults(run=latest)
     report_parser = commands.add_parser("report", help="one section of a report url from `latest`")
     report_parser.add_argument("url")
     report_parser.add_argument("--section", choices=list(SECTIONS) + ["full"], default="pm")
     report_parser.set_defaults(run=report)
     args = parser.parse_args()
+    if args.command == "latest" and args.tickers and not normalize(args.tickers):
+        latest_parser.error("provide at least one ticker, or omit tickers for the index ETFs")
     try:
         args.run(args)
     except ToolError as error:
