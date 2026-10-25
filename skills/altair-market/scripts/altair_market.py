@@ -24,8 +24,8 @@ ENDPOINT = os.environ.get("ALTAIR_MCP_URL", "https://altairworld.com/mcp/free")
 INDICES = {"SPX": ("S&P 500", "all"), "NDX": ("Nasdaq-100", "nasdaq100"),
            "SOX": ("PHLX Semiconductor", "sox")}
 ATTEMPTS = 3
-DISCLAIMER = ("AI-generated reports for AI testing and experimentation only. They are not financial or "
-              "investment advice and may contain errors; do not use them to make investment or trading decisions.")
+DISCLAIMER = ("Market readings for information and AI testing only. They are not financial or investment "
+              "advice and may contain errors; do not use them to make investment or trading decisions.")
 HEADERS = {
     "Content-Type": "application/json",
     "Accept": "application/json, text/event-stream",

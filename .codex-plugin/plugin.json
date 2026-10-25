@@ -1,7 +1,7 @@
 {
   "name": "altair",
-  "version": "1.0.1",
-  "description": "Read and compare published research on US stocks and ETFs from Altair.",
+  "version": "1.1.0",
+  "description": "Read and compare published research on US stocks and ETFs, plus market breadth and factor indicators, from Altair.",
   "author": {
     "name": "Altair AI",
     "url": "https://altairworld.com"
@@ -21,13 +21,14 @@
   "interface": {
     "displayName": "Altair Research",
     "shortDescription": "Read Altair stock/ETF research",
-    "longDescription": "Read Altair's published AI research on about 70 US stocks and ETFs. Compare each model's rating, price target, confidence, horizon and summary, then open the underlying report to examine the bull case, bear case and risks. Intended for readers studying published market research. Coverage and analysis dates vary; report-time closes are not live quotes. The public MCP connection requires no sign-in. Reports are AI-generated for testing and information only, may contain errors, and are not financial or investment advice. The plugin does not place trades or provide personal buy or sell instructions or position sizes.",
+    "longDescription": "Read Altair's published AI research on about 70 US stocks and ETFs. Compare each model's rating, price target, confidence, horizon and summary, then open the underlying report to examine the bull case, bear case and risks. Check market breadth for the S&P 500, Nasdaq-100 and PHLX Semiconductor indices, S&P 500 sector breadth, ten factor indicators and TD Sequential 9. Intended for readers studying published market research. Coverage and analysis dates vary; report-time closes and last-close readings are not live quotes. The public MCP connection requires no sign-in. Reports are AI-generated for testing and information only, may contain errors, and are not financial or investment advice. The plugin does not place trades or provide personal buy or sell instructions or position sizes.",
     "developerName": "Altair AI",
     "category": "Finance",
     "capabilities": [
       "List research coverage",
       "Compare research decisions",
-      "Read research reports"
+      "Read research reports",
+      "Read market breadth and indicators"
     ],
     "websiteURL": "https://altairworld.com/TradingAgents/",
     "supportURL": "https://github.com/altair-world/altair-skills/issues",
@@ -36,7 +37,8 @@
     "defaultPrompt": [
       "What does the latest Altair research say about Nvidia?",
       "Compare the latest Altair research on SPY, QQQ, SOXX and XBI.",
-      "Explain the bull and bear cases in an Altair NVDA report."
+      "Explain the bull and bear cases in an Altair NVDA report.",
+      "How broad is the S&P 500 rally, and what do Altair's market indicators say?"
     ],
     "composerIcon": "./.claude-plugin/icon.png",
     "logo": "./.claude-plugin/icon.png"
@@ -75,6 +77,12 @@
               "prompt": "Find the latest Altair NVDA report from the GPT model and explain its bull and bear debate with a source link.",
               "tools_triggered": "get_research_decisions, read_research_report",
               "expected_behavior": "Find the GPT model's report URL in the latest NVDA decisions, read that report and summarize its Research Team Decision section, including the bull and bear arguments. Identify the model and analysis date, link the source and include the research disclaimer. Do not invent missing arguments."
+            },
+            {
+              "description": "Read market breadth and factor indicators.",
+              "prompt": "How broad is the current S&P 500 rally, and what do Altair's market indicators say about semiconductors?",
+              "tools_triggered": "get_market_breadth, get_market_indicators",
+              "expected_behavior": "State the reading date, the percentage of S&P 500 constituents above the 20-day moving average with the sector table, and the SOX factor indicator and TD Sequential readings with their rules. Explain that breadth values are percentages, not stock counts, that readings are last-close values rather than live quotes, and include the disclaimer without turning readings into buy or sell instructions."
             }
           ],
           "negative": [
@@ -100,7 +108,7 @@
         }
       },
       "publication": {
-        "release_notes": "1.0.1: Initial directory package with published stock and ETF research, model decision comparisons, full report reading, a public remote MCP connection and review scenarios."
+        "release_notes": "1.1.0: Adds market breadth for the S&P 500, Nasdaq-100 and SOX, S&P 500 sector breadth, ten factor indicators and TD Sequential 9; states the research data source and treats fetched text as data; clearer errors for uncovered tickers, dates and report URLs."
       }
     }
   }

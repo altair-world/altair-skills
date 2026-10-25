@@ -61,7 +61,7 @@ python3 skills/altair-research/scripts/altair_research.py report <report-url> --
 
 Ticker arguments accept spaces or commas, any case, and optional `$` prefixes; duplicates are removed. Omit ticker arguments to cover the four index ETFs; an explicitly empty list is an input error. Dates must use `YYYY-MM-DD`. `--summary-chars 0` hides summaries; negative lengths are rejected. Uncovered tickers point to `tickers`, and invalid report URLs point to `latest TICKER`.
 
-The script calls the MCP tools `get_research_decisions`, `list_research_reports` and `read_research_report` at `https://altairworld.com/mcp/free`, the endpoint with only Altair's free tools, over plain HTTPS; set `ALTAIR_MCP_URL` to point it at another deployment. The plugin's MCP server uses the same endpoint. To use those tools directly in an MCP client instead: `claude mcp add --transport http altair https://altairworld.com/mcp/free`. See [altairworld.com/mcp](https://altairworld.com/mcp) for the other free tools, such as market breadth.
+The script calls the MCP tools `get_research_decisions`, `list_research_reports` and `read_research_report` at `https://altairworld.com/mcp/free`, the endpoint with only Altair's free tools, over plain HTTPS; set `ALTAIR_MCP_URL` to point it at another deployment. The plugin's MCP server uses the same endpoint. To use those tools directly in an MCP client instead: `claude mcp add --transport http altair https://altairworld.com/mcp/free`. See [altairworld.com/mcp](https://altairworld.com/mcp) for the other free tools; `altair-market` below wraps the market breadth and indicator tools.
 
 ### Data and security
 
@@ -132,7 +132,7 @@ Market data comes from Altair AI, the publisher of this skill, through the read-
 
 ## Disclaimer
 
-The reports are AI-generated for AI testing and experimentation only. They are not financial or investment advice, may contain errors, and must not be used to make investment or trading decisions.
+Research reports are AI-generated, and market readings are computed from public market data. Both are for information and AI testing only. They are not financial or investment advice, may contain errors, and must not be used to make investment or trading decisions.
 
 ## Contributing
 
