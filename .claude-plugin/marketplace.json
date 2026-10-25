@@ -9,7 +9,7 @@
     {
       "name": "altair",
       "source": "./",
-      "description": "Latest multi-model AI research on about 70 US stocks and ETFs, including SPY, QQQ, SOXX and XBI, from altairworld.com's free MCP server"
+      "description": "Latest multi-model AI research on about 70 US stocks and ETFs, including SPY, QQQ, SOXX and XBI, plus S&P 500, Nasdaq-100 and SOX market breadth and factor indicators, from altairworld.com's free MCP server"
     }
   ]
 }
