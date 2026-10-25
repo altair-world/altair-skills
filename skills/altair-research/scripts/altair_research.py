@@ -9,7 +9,7 @@ Standard library only (Python 3.8+). No API key, no MCP client setup.
   python3 altair_research.py latest SPY --date 2026-10-14
   python3 altair_research.py report <url> [--section pm|analysts|research|trader|risk|full]
 
-Set ALTAIR_MCP_URL to use another deployment of the server, e.g. a preview.
+Set ALTAIR_MCP_URL to an HTTPS deployment; HTTP is allowed only for localhost/127.0.0.1.
 """
 
 import argparse
@@ -21,6 +21,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ENDPOINT = os.environ.get("ALTAIR_MCP_URL", "https://altairworld.com/mcp/free")
@@ -257,6 +258,18 @@ def main():
     report_parser.add_argument("--section", choices=list(SECTIONS) + ["full"], default="pm")
     report_parser.set_defaults(run=report)
     args = parser.parse_args()
+    try:
+        endpoint = urllib.parse.urlsplit(ENDPOINT)
+        valid_endpoint = bool(endpoint.hostname) and (
+            endpoint.scheme == "https" or
+            (endpoint.scheme == "http" and endpoint.hostname in ("localhost", "127.0.0.1"))
+        )
+    except ValueError:
+        valid_endpoint = False
+    if not valid_endpoint:
+        print("altair_research: ALTAIR_MCP_URL must use HTTPS (HTTP only for localhost/127.0.0.1)",
+              file=sys.stderr)
+        sys.exit(2)
     try:
         args.run(args)
     except ToolError as error:
