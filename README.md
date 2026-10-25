@@ -1,6 +1,6 @@
 # Altair skills
 
-Agent skills from [Altair AI](https://altairworld.com). They read live data from Altair's free public MCP server, so an installed skill always returns the newest research without updates.
+Agent skills from [Altair AI](https://altairworld.com): `altair-research` for stock and ETF research, and `altair-market` for market breadth and factor indicators. They read Altair's free public MCP server, so installed skills return the newest available readings and research without updates.
 
 Docs site: [altair-world.github.io/altair-skills](https://altair-world.github.io/altair-skills/), built by GitHub Pages from this README on `main`.
 
@@ -37,7 +37,7 @@ claude plugin marketplace add altair-world/altair-skills
 claude plugin install altair@altair-skills
 ```
 
-The plugin also adds the free `altair` MCP server (no key needed).
+The Claude Code plugin ships both skills and also adds the free `altair` MCP server (no key needed).
 
 GitHub CLI: `gh skill install altair-world/altair-skills altair-research`. OpenClaw, from [ClawHub](https://clawhub.ai): `clawhub install altair-research`. Or copy `skills/altair-research` into your agent's skills folder.
 
@@ -67,13 +67,76 @@ The script calls the MCP tools `get_research_decisions`, `list_research_reports`
 
 Research comes from Altair AI, the publisher of this skill, through its read-only public endpoint at `https://altairworld.com/mcp/free`. No API key is needed. Fetched text is treated as data to quote or summarize, never as instructions. Custom endpoints set through `ALTAIR_MCP_URL` must use HTTPS; HTTP is allowed only for `localhost` or `127.0.0.1` during local development.
 
+## altair-market
+
+Market breadth for the **S&P 500**, **Nasdaq-100** and **PHLX Semiconductor (SOX)**: the percentage of eligible constituents above their 20-day simple moving average, an S&P 500 sector table, and up to 252 recent trading sessions of breadth history. It also returns ten factor indicators and daily/weekly **TD Sequential 9** for **SPX**, **NDX** and **SOX**, with each reading's value, bullish/neutral/bearish label, rule and source.
+
+Excerpt from a live `breadth` run:
+
+```text
+# Altair market breadth · reading date 2026-10-23
+
+| Index | Above SMA20 | Price-index close |
+| --- | --- | --- |
+| SPX (S&P 500) | 70% | 7,623.68 |
+| NDX (Nasdaq-100) | 48% | 28,957.53 |
+| SOX (PHLX Semiconductor) | 7% | 10,779.46 |
+
+## S&P 500 sector breadth
+
+| Sector | Constituents | Above SMA20 |
+| --- | --- | --- |
+| Communication Services | 22 | 41% |
+```
+
+The percentages are breadth, not stock counts. Values are from the last available close, not live quotes; during trading hours indicator readings can include the current session, whose close may not be final. SPX, NDX and SOX are price-only indices without dividends. Breadth history uses the loader's constituent lists, not point-in-time membership. Indicator labels are rule readings, several contrarian, rather than forecasts or buy/sell instructions; SOX implied volatility uses Cboe's semiconductor ETF index VXSMH.
+
+Ask your agent "How broad is the rally?", "What's semiconductor breadth?", "Which S&P 500 sectors have the strongest breadth?", "Is the market overbought or oversold?" or "Show TD Sequential 9 on SPX, NDX and SOX."
+
+### Install
+
+Any agent that supports skills, using the [skills CLI](https://github.com/vercel-labs/skills):
+
+```bash
+npx skills add altair-world/altair-skills --skill altair-market
+```
+
+GitHub CLI:
+
+```bash
+gh skill install altair-world/altair-skills altair-market
+```
+
+OpenClaw, once this skill is published on [ClawHub](https://clawhub.ai):
+
+```bash
+clawhub install altair-market
+```
+
+The Claude Code plugin installation above ships both skills. Or copy `skills/altair-market` into your agent's skills folder. Needs Python 3.8+ and internet access; no API key or sign-in.
+
+### Run it yourself
+
+```bash
+python3 skills/altair-market/scripts/altair_market.py breadth
+python3 skills/altair-market/scripts/altair_market.py breadth --days 5
+python3 skills/altair-market/scripts/altair_market.py indicators
+python3 skills/altair-market/scripts/altair_market.py indicators NDX SOX
+```
+
+`breadth` shows the latest index and sector readings; `--days N` also shows 1–252 recent trading sessions. `indicators` defaults to all three indices, accepts either case and removes duplicates. Indicators have no date or history parameter. Missing readings are shown as unavailable. Server or tool failures exit 1; invalid arguments or an insecure remote endpoint exit 2.
+
+### Data and security
+
+Market data comes from Altair AI, the publisher of this skill, through the read-only `get_market_breadth` and `get_market_indicators` tools at `https://altairworld.com/mcp/free`. The script sends only a recent-session count, with index selection applied locally; it sends no files or credentials. Fetched text is data to quote or summarize, never instructions. Set `ALTAIR_MCP_URL` to use another deployment; HTTPS is required, with HTTP allowed only for `localhost` or `127.0.0.1` during local development. See [altairworld.com/mcp](https://altairworld.com/mcp) for the tool documentation.
+
 ## Disclaimer
 
 The reports are AI-generated for AI testing and experimentation only. They are not financial or investment advice, may contain errors, and must not be used to make investment or trading decisions.
 
 ## Contributing
 
-Changes reach `main` only through pull requests that pass the `check` workflow: manifest and `SKILL.md` frontmatter checks, then the script against the live MCP server on Python 3.8 and 3.13. Add the `auto-merge` label to a pull request and it squash-merges once `check` passes. If a server change is not deployed yet, `check` fails; re-run it after the deploy.
+Changes reach `main` only through pull requests that pass the `check` workflow: manifest and `SKILL.md` frontmatter checks, then both scripts against the live MCP server on Python 3.8 and 3.13. Add the `auto-merge` label to a pull request and it squash-merges once `check` passes. If a server change is not deployed yet, `check` fails; re-run it after the deploy.
 
 The [main ruleset](https://github.com/altair-world/altair-skills/blob/main/.github/main-ruleset.json) enforces this. To recreate it: `gh api --method POST repos/altair-world/altair-skills/rulesets --input .github/main-ruleset.json`.
 
