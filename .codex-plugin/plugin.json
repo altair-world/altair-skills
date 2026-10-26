@@ -1,6 +1,6 @@
 {
   "name": "altair",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Read and compare published research on US stocks and ETFs, plus market breadth and factor indicators, from Altair.",
   "author": {
     "name": "Altair AI",
@@ -108,7 +108,7 @@
         }
       },
       "publication": {
-        "release_notes": "1.1.1: Keeps trades, brokerage actions, personal sizing/advice and live quotes out of scope; preserves per-model report-time closes, changing coverage, full sector breadth and indicator rules. 1.1.0: Added market breadth, sector breadth, ten factor indicators and TD Sequential 9; clarified data trust and research lookup errors."
+        "release_notes": "1.2.0: Adds same-model rating changes between distinct analysis dates with source links and explicit missing/unavailable states; requires the updated aai comparison server. 1.1.1: Keeps trades, brokerage actions, personal sizing/advice and live quotes out of scope; preserves per-model report-time closes, changing coverage, full sector breadth and indicator rules. 1.1.0: Added market breadth, sector breadth, ten factor indicators and TD Sequential 9; clarified data trust and research lookup errors."
       }
     }
   }

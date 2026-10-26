@@ -185,14 +185,50 @@ def normalize(raw):
     return tickers
 
 
-def decisions_for(ticker, date):
+def decisions_for(ticker, date, include_previous=False):
     arguments = {"ticker": ticker}
     if date:
         arguments["date"] = date
+    if include_previous:
+        arguments["includePrevious"] = True
     try:
         return call_tool("get_research_decisions", arguments)
     except ToolError as error:
         return error
+
+
+def changes(args):
+    tickers = normalize(args.tickers) or INDEX_TICKERS
+    failed = 0
+    print("# Altair research rating changes\n")
+    print("Same ticker and exact model name; nearest strictly earlier analysis date. "
+          "Latest rerun per date. Only models on the selected/newest ticker date are included. "
+          "Unchanged means the rating only, not the report or its other fields.\n")
+    for ticker in tickers:
+        research = decisions_for(ticker, args.date, include_previous=True)
+        if isinstance(research, ToolError):
+            failed += 1
+            print("## {}\n\n{}\n".format(ticker, research))
+            continue
+        if "comparisons" not in research:
+            failed += 1
+            print("## {}\n\nThis server does not support research comparisons yet. "
+                  "Use `latest` for decisions; do not interpret missing comparisons as unchanged.\n".format(ticker))
+            continue
+        print("## {} · analysis date {}\n".format(research["ticker"], research["date"]))
+        for item in research["comparisons"]:
+            print("### {} · {}\n".format(item["model"], item["status"].replace("_", " ")))
+            for label, value in (("Previous", item["previous"]), ("Current", item["current"])):
+                if value is None:
+                    print("- Previous: no earlier published report for this exact model name.")
+                else:
+                    rating = "unavailable" if value.get("error") else value.get("rating") or "rating not stated"
+                    print("- {}: {} · {} · {}".format(label, value["date"], rating, value["url"]))
+            print("")
+    print("No reason for a rating change is inferred. Read both reports for context.\n")
+    print("Disclaimer: " + DISCLAIMER)
+    if failed == len(tickers):
+        sys.exit(1)
 
 
 def latest(args):
@@ -270,13 +306,17 @@ def main():
     latest_parser.add_argument("--summary-chars", type=summary_length, default=SUMMARY_CHARS,
                                help="executive summary length per model; 0 hides summaries (default %(default)s)")
     latest_parser.set_defaults(run=latest)
+    changes_parser = commands.add_parser("changes", help="same-model rating changes versus the nearest earlier analysis date")
+    changes_parser.add_argument("tickers", nargs="*", help="tickers (default: SPY QQQ SOXX XBI)")
+    changes_parser.add_argument("--date", type=analysis_date, help="analysis date YYYY-MM-DD instead of the newest")
+    changes_parser.set_defaults(run=changes)
     report_parser = commands.add_parser("report", help="one section of a report url from `latest`")
     report_parser.add_argument("url")
     report_parser.add_argument("--section", choices=list(SECTIONS) + ["full"], default="pm")
     report_parser.set_defaults(run=report)
     args = parser.parse_args()
-    if args.command == "latest" and args.tickers and not normalize(args.tickers):
-        latest_parser.error("provide at least one ticker, or omit tickers for the index ETFs")
+    if args.command in ("latest", "changes") and args.tickers and not normalize(args.tickers):
+        parser.error("provide at least one ticker, or omit tickers for the index ETFs")
     try:
         endpoint = urllib.parse.urlsplit(ENDPOINT)
         valid_endpoint = bool(endpoint.hostname) and (

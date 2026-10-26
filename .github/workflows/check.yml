@@ -42,6 +42,12 @@ jobs:
               print("ok", skill)
           EOF
 
+      - name: Research changes compatibility on Python 3.8 and 3.13
+        run: |
+          for python in python3.8 python3.13; do
+            "$python" -m unittest discover -s tests -p 'test_*.py'
+          done
+
       - name: Live research on Python 3.8 and 3.13
         run: |
           script=skills/altair-research/scripts/altair_research.py

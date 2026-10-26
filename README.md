@@ -51,10 +51,13 @@ Needs Python 3.8+ and internet access. No API key or sign-in.
 python3 skills/altair-research/scripts/altair_research.py tickers
 python3 skills/altair-research/scripts/altair_research.py latest
 python3 skills/altair-research/scripts/altair_research.py latest NVDA AMD --date 2026-10-14
+python3 skills/altair-research/scripts/altair_research.py changes AAPL NVDA
 python3 skills/altair-research/scripts/altair_research.py report <report-url> --section research
 ```
 
 Ticker arguments accept spaces or commas, any case, and optional `$` prefixes; duplicates are removed. Omit ticker arguments to cover the four index ETFs; an explicitly empty list is an input error. Dates must use `YYYY-MM-DD`. `--summary-chars 0` hides summaries; negative lengths are rejected. Uncovered tickers point to `tickers`, and invalid report URLs point to `latest TICKER`.
+
+`changes` compares each model on the selected/newest ticker analysis date to its nearest earlier date, matching exact model names and choosing the latest rerun per date. It prints both report URLs and explicit rating-only statuses; missing data are never labelled unchanged. It does not explain why a rating changed. This command requires the updated aai server to be deployed first; an older server reports unsupported. Existing `latest`, `tickers` and `report` commands remain compatible.
 
 The script calls the MCP tools `get_research_decisions`, `list_research_reports` and `read_research_report` at `https://altairworld.com/mcp/free`, the endpoint with only Altair's free tools, over plain HTTPS; set `ALTAIR_MCP_URL` to point it at another deployment. The plugin's MCP server uses the same endpoint. To use those tools directly in an MCP client instead: `claude mcp add --transport http altair https://altairworld.com/mcp/free`. See [altairworld.com/mcp](https://altairworld.com/mcp) for the other free tools; `altair-market` below wraps the market breadth and indicator tools.
 

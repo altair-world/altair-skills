@@ -1,6 +1,6 @@
 ---
 name: altair-research
-description: Latest AI research on US stocks and ETFs from altairworld.com's free public MCP server. Covers about 70 tickers, including the SPY, QQQ, SOXX and XBI index ETFs (refreshed weekly) and stocks such as NVDA, AAPL, MSFT, TSLA, AVGO and META. Several Claude, GPT and Gemini models each run the same TradingAgents research pipeline; this skill returns every model's final rating, price target, confidence, horizon and summary, and where they disagree. Use when the user asks for the outlook, rating, price target, bull or bear case, or AI research view on a stock ticker or company, the broad market, Nasdaq, semiconductors or biotech. Not for live or real-time quotes, placing trades or brokerage actions, personal position sizing or buy/sell advice. For these, explain plugin limits without tools, web search, order steps, position sizes or personal questions; offer dated research only on request. No API key. Research for information only, not investment advice.
+description: AI research on US stocks and ETFs from altairworld.com's free public MCP server. Covers about 70 tickers, including SPY, QQQ, SOXX and XBI index ETFs (refreshed weekly) and stocks such as NVDA, AAPL, MSFT, TSLA, AVGO and META. Claude, GPT and Gemini models run the TradingAgents pipeline; this skill returns each model's final rating, price target, confidence, horizon and summary, model disagreement and same-model rating changes. Use for outlook, rating, price target, bull or bear case, changes in AI research on a ticker or company, the broad market, Nasdaq, semiconductors or biotech. Not for live quotes, trades, brokerage actions, personal position sizing or buy/sell advice. For these, explain plugin limits without tools, web search, order steps, position sizes or personal questions; offer dated research only on request. No API key. Research for information only, not investment advice.
 license: MIT
 ---
 
@@ -28,15 +28,18 @@ python3 scripts/altair_research.py tickers                       # covered ticke
 python3 scripts/altair_research.py latest                        # SPY QQQ SOXX XBI
 python3 scripts/altair_research.py latest NVDA AMD               # any covered tickers
 python3 scripts/altair_research.py latest TSLA --date 2026-10-14 # an earlier analysis date
+python3 scripts/altair_research.py changes AAPL NVDA            # same-model rating changes
 python3 scripts/altair_research.py report <report-url> --section risk
 ```
 
 - `tickers` lists every covered ticker with its report count, index ETFs first.
 - `latest [TICKER ...]` prints one block per ticker for its newest analysis date: a table with each model's final rating, report-time close, target, target vs close, confidence and horizon, then each model's executive summary. Tickers may be space- or comma-separated, any case, with or without `$`. With no ticker arguments it covers the four index ETFs; an explicitly empty ticker list is an input error. `--date` requires a valid `YYYY-MM-DD` date. `--summary-chars N` sets summary length (default 600); 0 hides summaries, and negative values are rejected.
 - `report` prints one section of a report URL from `latest`: `pm` (portfolio manager, default), `analysts` (technical, sentiment, news, fundamentals), `research` (bull/bear debate), `trader`, `risk`, or `full` (150–300 KB; avoid unless asked).
+- `changes [TICKER ...] [--date YYYY-MM-DD]` asks the server for each model represented on the selected/newest ticker analysis date versus that exact model's nearest strictly earlier analysis date. The latest run-start timestamp selects same-date reruns. Show both dated source URLs and the explicit changed, unchanged, no previous or unavailable status. Unchanged describes only the rating after case/whitespace normalization, not the whole report, target or reasoning. Never substitute another model, merge renamed models, or interpret missing ratings/reports as unchanged. For why something changed, read both reports and distinguish their stated reasoning from your inference. An older server without comparisons must be reported as unsupported, not guessed around.
 - An uncovered ticker prints "No research for …" and points to `tickers`; an invalid report URL points to `latest TICKER` for report URLs; a `--date` without reports lists the recent analysis dates. A model whose report could not be read shows as "unavailable". Exit status 1 means the server was unreachable or every ticker failed; say so instead of guessing.
 
 If the Altair MCP server is already connected, call its `get_research_decisions { ticker, date? }` tool for the same table data, and `read_research_report` only when the user wants a model's full reasoning (150–300 KB per report).
+For changes over time, use `get_research_decisions { ticker, date?, includePrevious: true }`; default calls retain the existing same-date model comparison.
 
 ## Answering
 
