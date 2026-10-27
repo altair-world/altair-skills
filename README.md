@@ -45,6 +45,8 @@ GitHub CLI: `gh skill install altair-world/altair-skills altair-research`. OpenC
 
 Needs Python 3.8+ and internet access. No API key or sign-in.
 
+For Codex, the skills CLI installs the selected skill; no separately configured MCP connection in your client is needed because the Python helpers call Altair's public MCP endpoint directly. This repository also includes a [Codex compatibility plugin manifest](https://developers.openai.com/plugins/build/plugins) that bundles both skills and the free MCP connection. Local packaging support does not mean a submitted version is already available in the public directory; see Listings below for the submission status.
+
 ### Run it yourself
 
 ```bash
@@ -145,7 +147,18 @@ Research reports are AI-generated, and market readings are computed from public 
 
 ## Contributing
 
-Changes reach `main` only through pull requests that pass the `check` workflow: manifest and `SKILL.md` frontmatter checks, then both scripts against the live MCP server on Python 3.8 and 3.13. Add the `auto-merge` label to a pull request and it squash-merges once `check` passes. If a server change is not deployed yet, `check` fails; re-run it after the deploy.
+Changes reach `main` only through pull requests that pass the `check` workflow: offline Claude/Codex package validation, then both scripts against the live MCP server on Python 3.8 and 3.13. Add the `auto-merge` label to a pull request and it squash-merges once `check` passes. If a server change is not deployed yet, `check` fails; re-run it after the deploy.
+
+Run the offline checks locally with no installation or network requests:
+
+```bash
+python3 scripts/validate_package.py
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
+These checks resolve paths from the plugin root, confirm that both clients package both advertised skills, check runnable script/icon resources and version alignment, and require the shared credential-free `/mcp/free` connection. They are repository contract checks, not a substitute for client-native validation or actual agent execution. No skill behavior changes or version bump are needed for packaging checks alone.
+
+The contract also checks Claude manifest and marketplace component declarations. Those may use the shared `./skills/` and `./.mcp.json` paths; other overrides require a deliberate validator update rather than passing uninspected. Referenced helpers must be files, not merely existing paths. This is intentionally narrower than the full set of configurations the clients support.
 
 The [main ruleset](https://github.com/altair-world/altair-skills/blob/main/.github/main-ruleset.json) enforces this. To recreate it: `gh api --method POST repos/altair-world/altair-skills/rulesets --input .github/main-ruleset.json`.
 
