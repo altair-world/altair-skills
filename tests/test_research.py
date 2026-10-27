@@ -18,7 +18,8 @@ class InvalidServerResponseTests(unittest.TestCase):
             b'{"result": {"content": []}}',
             b'{"result": {"content": [{"text": null}]}}',
         ]
-        commands = [["tickers"], ["latest", "SPY"], ["report", "https://altairworld.com/report"]]
+        commands = [["tickers"], ["latest", "SPY"], ["changes", "SPY"],
+                    ["report", "https://altairworld.com/report"]]
         for command in commands:
             for payload in payloads:
                 with self.subTest(command=command, payload=payload):
