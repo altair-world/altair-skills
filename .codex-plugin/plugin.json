@@ -1,6 +1,6 @@
 {
   "name": "altair",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Read and compare published research on US stocks and ETFs, plus market breadth and factor indicators, from Altair.",
   "author": {
     "name": "Altair AI",

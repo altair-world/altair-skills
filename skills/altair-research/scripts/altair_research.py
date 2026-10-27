@@ -293,6 +293,8 @@ def main():
         args.run(args)
     except ToolError as error:
         sys.exit("altair_research: {}".format(error))
+    except (ValueError, KeyError, IndexError, TypeError) as error:
+        sys.exit("altair_research: invalid server response: {}".format(error))
 
 
 if __name__ == "__main__":
