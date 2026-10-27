@@ -54,7 +54,7 @@ python3 skills/altair-research/scripts/altair_research.py latest NVDA AMD --date
 python3 skills/altair-research/scripts/altair_research.py report <report-url> --section research
 ```
 
-Ticker arguments accept spaces or commas, any case, and optional `$` prefixes; duplicates are removed. Omit ticker arguments to cover the four index ETFs; an explicitly empty list is an input error. Dates must use `YYYY-MM-DD`. `--summary-chars 0` hides summaries; negative lengths are rejected. Uncovered tickers point to `tickers`, and invalid report URLs point to `latest TICKER`.
+Ticker arguments accept spaces or commas, any case, and optional `$` prefixes; duplicates are removed. Omit ticker arguments to cover the four index ETFs; an explicitly empty list is an input error. Dates must use `YYYY-MM-DD`. `--summary-chars 0` hides summaries; negative lengths are rejected. Uncovered tickers point to `tickers`, and invalid report URLs point to `latest TICKER`; malformed server responses exit 1 with an error message.
 
 The script calls the MCP tools `get_research_decisions`, `list_research_reports` and `read_research_report` at `https://altairworld.com/mcp/free`, the endpoint with only Altair's free tools, over plain HTTPS; set `ALTAIR_MCP_URL` to point it at another deployment. The plugin's MCP server uses the same endpoint. To use those tools directly in an MCP client instead: `claude mcp add --transport http altair https://altairworld.com/mcp/free`. See [altairworld.com/mcp](https://altairworld.com/mcp) for the other free tools; `altair-market` below wraps the market breadth and indicator tools.
 
