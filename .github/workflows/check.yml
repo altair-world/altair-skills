@@ -50,7 +50,7 @@ jobs:
             grep -q 'SPY (' tickers.md
             "$python" "$script" latest SPY NVDA --summary-chars 120 | tee latest.md
             test "$(grep -c '^## [A-Z]* · analysis date' latest.md)" -eq 2
-            ! grep -q 'unavailable' latest.md
+            if grep -q 'unavailable' latest.md; then exit 1; fi
           done
 
       - name: Live market breadth and indicators on Python 3.8 and 3.13
