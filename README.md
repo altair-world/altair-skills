@@ -55,7 +55,7 @@ python3 skills/altair-research/scripts/altair_research.py changes AAPL NVDA
 python3 skills/altair-research/scripts/altair_research.py report <report-url> --section research
 ```
 
-Ticker arguments accept spaces or commas, any case, and optional `$` prefixes; duplicates are removed. Omit ticker arguments to cover the four index ETFs; an explicitly empty list is an input error. Dates must use `YYYY-MM-DD`. `--summary-chars 0` hides summaries; negative lengths are rejected. Uncovered tickers point to `tickers`, and invalid report URLs point to `latest TICKER`.
+Ticker arguments accept spaces or commas, any case, and optional `$` prefixes; duplicates are removed. Omit ticker arguments to cover the four index ETFs; an explicitly empty list is an input error. Dates must use `YYYY-MM-DD`. `--summary-chars 0` hides summaries; negative lengths are rejected. Uncovered tickers point to `tickers`, and invalid report URLs point to `latest TICKER`; malformed server responses exit 1 with an error message.
 
 `changes` compares each model on the selected/newest ticker analysis date to its nearest earlier date, matching exact model names and choosing the latest rerun per date. It prints both report URLs and explicit rating-only statuses; missing data are never labelled unchanged. It does not explain why a rating changed. This command requires the updated aai server to be deployed first; an older server reports unsupported. Existing `latest`, `tickers` and `report` commands remain compatible.
 
