@@ -54,10 +54,14 @@ python3 skills/altair-research/scripts/altair_research.py tickers
 python3 skills/altair-research/scripts/altair_research.py latest
 python3 skills/altair-research/scripts/altair_research.py latest NVDA AMD --date 2026-10-14
 python3 skills/altair-research/scripts/altair_research.py changes AAPL NVDA
+python3 skills/altair-research/scripts/altair_research.py latest NVDA --json
+python3 skills/altair-research/scripts/altair_research.py changes AAPL --json
 python3 skills/altair-research/scripts/altair_research.py report <report-url> --section research
 ```
 
 Ticker arguments accept spaces or commas, any case, and optional `$` prefixes; duplicates are removed. Omit ticker arguments to cover the four index ETFs; an explicitly empty list is an input error. Dates must use `YYYY-MM-DD`. `--summary-chars 0` hides summaries; negative lengths are rejected. Uncovered tickers point to `tickers`, and invalid report URLs point to `latest TICKER`; malformed server responses exit 1 with an error message.
+
+`latest` and `changes` accept `--json` for automation. Standard output is one JSON document with `schemaVersion: 1`, `command`, UTC `fetchedAt`, MCP endpoint `source`, nullable `requestedDate`, `results`, per-ticker `errors`, and `disclaimer`. Results preserve the server's per-model fields, source URLs, analysis dates, nulls and unavailable states; summaries are not truncated and `--summary-chars` does not apply. Markdown remains the default. As with Markdown, partial ticker failures exit 0 but are explicit in `errors`; all ticker failures exit 1. Invalid input exits 2, and malformed responses exit 1 with stderr diagnostics and no partial JSON document. No server update is required for `latest --json`; `changes --json` requires the existing comparison tool and reports older servers as unsupported, never unchanged.
 
 `changes` compares each model on the selected/newest ticker analysis date to its nearest earlier date, matching exact model names and choosing the latest rerun per date. It prints both report URLs and explicit rating-only statuses; missing data are never labelled unchanged. It does not explain why a rating changed. This command requires the updated aai server to be deployed first; an older server reports unsupported. Existing `latest`, `tickers` and `report` commands remain compatible.
 
