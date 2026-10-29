@@ -2,7 +2,7 @@
   "name": "altair",
   "displayName": "Altair Research",
   "description": "Latest multi-model AI research on about 70 US stocks and ETFs, including SPY, QQQ, SOXX and XBI, plus S&P 500, Nasdaq-100 and SOX market breadth and factor indicators, from altairworld.com's free MCP server",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": {
     "name": "Altair AI",
     "url": "https://altairworld.com"

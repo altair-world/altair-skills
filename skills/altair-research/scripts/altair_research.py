@@ -91,6 +91,8 @@ def call_tool(name, arguments):
     if "error" in message:
         raise ToolError("{}: {}".format(name, message["error"].get("message", message["error"])))
     result = message["result"]
+    if not isinstance(result, dict):
+        raise ValueError("expected MCP tool result object")
     if result.get("isError"):
         detail = " ".join(part.get("text", "") for part in result.get("content", []))
         detail = detail.replace("Use list_research_reports to see covered tickers.",
@@ -197,7 +199,44 @@ def decisions_for(ticker, date, include_previous=False):
         return error
 
 
+def json_research(args):
+    """Emit one versioned document; retain source fields rather than deriving prices."""
+    tickers = normalize(args.tickers) or INDEX_TICKERS
+    include_previous = args.command == "changes"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        researched = list(pool.map(lambda ticker: decisions_for(ticker, args.date, include_previous), tickers))
+    results, errors = [], []
+    for ticker, research in zip(tickers, researched):
+        if isinstance(research, ToolError):
+            errors.append({"ticker": ticker, "message": str(research)})
+            continue
+        if not isinstance(research, dict) or not isinstance(research.get("decisions"), list):
+            raise ValueError("expected research decisions")
+        if args.command == "changes" and not isinstance(research.get("comparisons"), list):
+            errors.append({"ticker": ticker, "message": "Server does not support research comparisons; missing is not unchanged."})
+            continue
+        if research.get("ticker") != ticker:
+            raise ValueError("research ticker does not match request")
+        try:
+            analysis_date(research["date"])
+        except argparse.ArgumentTypeError as error:
+            raise ValueError(str(error))
+        if args.date and research["date"] != args.date:
+            raise ValueError("research date does not match request")
+        results.append(research)
+    print(json.dumps({
+        "schemaVersion": 1, "command": args.command,
+        "fetchedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "source": ENDPOINT, "requestedDate": args.date,
+        "results": results, "errors": errors, "disclaimer": DISCLAIMER,
+    }, ensure_ascii=False, allow_nan=False))
+    if not results:
+        sys.exit(1)
+
+
 def changes(args):
+    if args.json:
+        return json_research(args)
     tickers = normalize(args.tickers) or INDEX_TICKERS
     failed = 0
     print("# Altair research rating changes\n")
@@ -232,6 +271,8 @@ def changes(args):
 
 
 def latest(args):
+    if args.json:
+        return json_research(args)
     tickers = normalize(args.tickers) or INDEX_TICKERS
     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
         researched = list(pool.map(lambda ticker: decisions_for(ticker, args.date), tickers))
@@ -303,12 +344,14 @@ def main():
     latest_parser.add_argument("tickers", nargs="*",
                                help="tickers, space- or comma-separated (default: {})".format(" ".join(INDEX_TICKERS)))
     latest_parser.add_argument("--date", type=analysis_date, help="analysis date YYYY-MM-DD instead of the newest")
+    latest_parser.add_argument("--json", action="store_true", help="versioned JSON with unmodified source fields; no summary truncation")
     latest_parser.add_argument("--summary-chars", type=summary_length, default=SUMMARY_CHARS,
                                help="executive summary length per model; 0 hides summaries (default %(default)s)")
     latest_parser.set_defaults(run=latest)
     changes_parser = commands.add_parser("changes", help="same-model rating changes versus the nearest earlier analysis date")
     changes_parser.add_argument("tickers", nargs="*", help="tickers (default: SPY QQQ SOXX XBI)")
     changes_parser.add_argument("--date", type=analysis_date, help="analysis date YYYY-MM-DD instead of the newest")
+    changes_parser.add_argument("--json", action="store_true", help="versioned JSON with decisions, comparisons and explicit errors")
     changes_parser.set_defaults(run=changes)
     report_parser = commands.add_parser("report", help="one section of a report url from `latest`")
     report_parser.add_argument("url")
