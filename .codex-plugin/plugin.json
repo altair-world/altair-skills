@@ -49,6 +49,12 @@
         "test_cases": {
           "positive": [
             {
+              "description": "Read individual-symbol indicators without substituting index data.",
+              "prompt": "Show Altair's latest NVDA factor indicators and TD Sequential readings, with rules and sources.",
+              "tools_triggered": "get_ticker_indicators",
+              "expected_behavior": "Request NVDA, state instrument.date and that the latest session may still be open, preserve unavailable implied-volatility and variance-risk-premium readings, distinguish shared macro context from stock-specific measurements, and do not claim historical index evidence validates NVDA returns. Include source links and the informational disclaimer without trading advice."
+            },
+            {
               "description": "Discover available research coverage.",
               "prompt": "Which stocks and ETFs have Altair research, and how many reports are available for each?",
               "tools_triggered": "list_research_reports",
@@ -108,7 +114,7 @@
         }
       },
       "publication": {
-        "release_notes": "1.3.0: Adds opt-in JSON for latest research and same-model changes, preserving dated source fields and explicit errors. 1.2.0: Adds same-model rating changes between distinct analysis dates with source links and explicit missing/unavailable states; requires the updated aai comparison server. 1.1.1: Keeps trades, brokerage actions, personal sizing/advice and live quotes out of scope; preserves per-model report-time closes, changing coverage, full sector breadth and indicator rules. 1.1.0: Added market breadth, sector breadth, ten factor indicators and TD Sequential 9; clarified data trust and research lookup errors."
+        "release_notes": "1.3.0: Adds latest-only indicators for any Yahoo Finance symbol with sources and explicit unavailable readings, and opt-in JSON for latest research and same-model changes that keeps dated source fields and explicit errors. 1.2.0: Adds same-model rating changes between distinct analysis dates with source links and explicit missing/unavailable states; requires the updated aai comparison server. 1.1.1: Keeps trades, brokerage actions, personal sizing/advice and live quotes out of scope; preserves per-model report-time closes, changing coverage, full sector breadth and indicator rules. 1.1.0: Added market breadth, sector breadth, ten factor indicators and TD Sequential 9; clarified data trust and research lookup errors."
       }
     }
   }

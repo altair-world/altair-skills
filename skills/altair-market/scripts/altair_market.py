@@ -7,6 +7,7 @@ Standard library only (Python 3.8+). No API key, no MCP client setup.
   python3 altair_market.py breadth --days 5          # also show recent trading sessions
   python3 altair_market.py indicators                # SPX NDX SOX, including TD Sequential 9
   python3 altair_market.py indicators NDX SOX         # selected indices
+  python3 altair_market.py ticker NVDA                # one Yahoo Finance symbol
 
 Set ALTAIR_MCP_URL to an HTTPS deployment; HTTP is allowed only for localhost/127.0.0.1.
 """
@@ -14,6 +15,7 @@ Set ALTAIR_MCP_URL to an HTTPS deployment; HTTP is allowed only for localhost/12
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -75,9 +77,14 @@ def call_tool(name, arguments):
             if attempt == ATTEMPTS - 1:
                 raise ToolError("{} failed after {} attempts: {}".format(name, ATTEMPTS, error))
             time.sleep(2 ** attempt)
+    if not isinstance(message, dict):
+        raise ToolError("invalid server response: expected a JSON object")
     if "error" in message:
-        raise ToolError("{}: {}".format(name, message["error"].get("message", message["error"])))
+        detail = message["error"]
+        raise ToolError("{}: {}".format(name, detail.get("message", detail) if isinstance(detail, dict) else detail))
     result = message["result"]
+    if not isinstance(result, dict):
+        raise ToolError("invalid server response: expected a tool result object")
     if result.get("isError"):
         detail = " ".join(part.get("text", "") for part in result.get("content", []))
         raise ToolError(detail.strip() or "{}: tool error".format(name))
@@ -85,6 +92,8 @@ def call_tool(name, arguments):
         data = result["structuredContent"]
     else:
         data = json.loads(result["content"][0]["text"])
+    if not isinstance(data, dict):
+        raise ToolError("invalid server response: expected tool data object")
     if "error" in data:
         raise ToolError("{}: {}".format(name, data["error"]))
     return data
@@ -155,24 +164,30 @@ def indicators(args):
         out.extend(["## {} · reading date {} · {} · close {}".format(
             symbol, index["date"], cell(index["name"]), number(index["close"])), "",
             "| Indicator | Value | Reading | Signal |", "| --- | --- | --- | --- |"])
-        for indicator in data["indicators"]:
-            reading = indicator["readings"].get(symbol)
-            if reading is None:
-                out.append("| {} | n/a | unavailable | n/a |".format(cell(indicator["name"])))
-                continue
-            value = "{:.2%}".format(reading["value"]) if indicator["unit"] == "percent" else "{:g}".format(reading["value"])
-            out.append("| {} | {} | {} | {} |".format(
-                cell(indicator["name"]), value, cell(reading["reading"]), cell(reading["signal"])))
+        out.extend(indicator_row(indicator, indicator["readings"].get(symbol)) for indicator in data["indicators"])
         out.append("")
-    out.extend(["## Rules and sources", "", "| Indicator | Rule | Source |", "| --- | --- | --- |"])
-    for indicator in data["indicators"]:
+    out.extend(rules_table(data["indicators"]))
+    out.extend(["", "Disclaimer: " + DISCLAIMER])
+    print("\n".join(out))
+
+
+def indicator_row(indicator, reading):
+    """One table row; a missing reading is unavailable, never zero."""
+    if reading is None:
+        return "| {} | n/a | unavailable | n/a |".format(cell(indicator["name"]))
+    value = "{:.2%}".format(reading["value"]) if indicator["unit"] == "percent" else "{:g}".format(reading["value"])
+    return "| {} | {} | {} | {} |".format(cell(indicator["name"]), value, cell(reading["reading"]), cell(reading["signal"]))
+
+
+def rules_table(indicators):
+    out = ["## Rules and sources", "", "| Indicator | Rule | Source |", "| --- | --- | --- |"]
+    for indicator in indicators:
         source = indicator["source"]
         citation = cell(source["label"])
         if source["url"]:
             citation = "[{}]({})".format(citation, source["url"])
         out.append("| {} | {} | {} |".format(cell(indicator["name"]), cell(indicator["rule"]), citation))
-    out.extend(["", "Disclaimer: " + DISCLAIMER])
-    print("\n".join(out))
+    return out
 
 
 def session_count(value):
@@ -183,6 +198,35 @@ def session_count(value):
     except ValueError:
         pass
     raise argparse.ArgumentTypeError("expected 1–252 trading sessions, got {!r}".format(value))
+
+
+def ticker_symbol(value):
+    symbol = value.strip().upper()
+    if not re.fullmatch(r"[A-Z0-9^][A-Z0-9.=^-]{0,19}", symbol):
+        raise argparse.ArgumentTypeError("expected a Yahoo Finance symbol, such as NVDA or BRK-B")
+    return symbol
+
+
+def ticker(args):
+    data = call_tool("get_ticker_indicators", {"ticker": args.symbol})
+    instrument = data["instrument"]
+    if instrument["symbol"] != args.symbol:
+        raise ToolError("invalid server response: ticker does not match requested symbol")
+    out = [
+        "# Altair ticker indicators · {} · reading date {}".format(args.symbol, instrument["date"]), "",
+        "{} · close {}".format(cell(instrument["name"]), number(instrument["close"])), "",
+        "Source: https://altairworld.com/indicators through the public MCP server {}. "
+        "Not live quotes; the latest session can still be open and its close may not be final. "
+        "Labels describe rules, not forecasts or buy/sell instructions. Shared macro readings are "
+        "market context, not measurements of this stock. Historical S&P 500/Nasdaq-100 evidence "
+        "does not validate returns for this instrument.".format(ENDPOINT), "",
+        "| Indicator | Value | Reading | Signal |", "| --- | --- | --- | --- |",
+    ]
+    out.extend(indicator_row(indicator, indicator["reading"]) for indicator in data["indicators"])
+    out.append("")
+    out.extend(rules_table(data["indicators"]))
+    out.extend(["", "Server disclaimer: " + cell(data["disclaimer"]), "", "Disclaimer: " + DISCLAIMER])
+    print("\n".join(out))
 
 
 def index_symbol(value):
@@ -202,6 +246,9 @@ def main():
     indicators_parser.add_argument("indices", nargs="*", type=index_symbol, metavar="INDEX",
                                    help="indices to display (default: SPX NDX SOX)")
     indicators_parser.set_defaults(run=indicators)
+    ticker_parser = commands.add_parser("ticker", help="latest indicators for one stock, ETF or Yahoo Finance symbol")
+    ticker_parser.add_argument("symbol", type=ticker_symbol, help="e.g. NVDA, BRK-B or 0700.HK")
+    ticker_parser.set_defaults(run=ticker)
     args = parser.parse_args()
     try:
         endpoint = urllib.parse.urlsplit(ENDPOINT)
