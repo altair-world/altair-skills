@@ -67,4 +67,9 @@ jobs:
             test "$(grep -Ec '^\| 200-day trend \| [-0-9.]+% \|' indicators.md)" -eq 3
             test "$(grep -Ec '^\| TD Sequential 9 \(daily\) \| [-0-9]+ \|' indicators.md)" -eq 3
             test "$(grep -Ec '^\| TD Sequential 9 \(weekly\) \| [-0-9]+ \|' indicators.md)" -eq 3
+            "$python" "$script" ticker NVDA | tee ticker.md
+            grep -Eq '^# Altair ticker indicators · NVDA · reading date [0-9]{4}-[0-9]{2}-[0-9]{2}$' ticker.md
+            grep -Eq '^\| 200-day trend \| [-0-9.]+% \|' ticker.md
+            grep -Fq '| Implied volatility (VIX, VXN, VXSMH) | n/a | unavailable | n/a |' ticker.md
+            grep -Fq '| Variance risk premium | n/a | unavailable | n/a |' ticker.md
           done
