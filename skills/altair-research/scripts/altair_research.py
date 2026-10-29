@@ -202,9 +202,11 @@ def decisions_for(ticker, date, include_previous=False):
 def json_research(args):
     """Emit one versioned document; retain source fields rather than deriving prices."""
     tickers = normalize(args.tickers) or INDEX_TICKERS
+    include_previous = args.command == "changes"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        researched = list(pool.map(lambda ticker: decisions_for(ticker, args.date, include_previous), tickers))
     results, errors = [], []
-    for ticker in tickers:
-        research = decisions_for(ticker, args.date, include_previous=args.command == "changes")
+    for ticker, research in zip(tickers, researched):
         if isinstance(research, ToolError):
             errors.append({"ticker": ticker, "message": str(research)})
             continue
