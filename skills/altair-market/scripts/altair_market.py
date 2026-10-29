@@ -164,24 +164,30 @@ def indicators(args):
         out.extend(["## {} · reading date {} · {} · close {}".format(
             symbol, index["date"], cell(index["name"]), number(index["close"])), "",
             "| Indicator | Value | Reading | Signal |", "| --- | --- | --- | --- |"])
-        for indicator in data["indicators"]:
-            reading = indicator["readings"].get(symbol)
-            if reading is None:
-                out.append("| {} | n/a | unavailable | n/a |".format(cell(indicator["name"])))
-                continue
-            value = "{:.2%}".format(reading["value"]) if indicator["unit"] == "percent" else "{:g}".format(reading["value"])
-            out.append("| {} | {} | {} | {} |".format(
-                cell(indicator["name"]), value, cell(reading["reading"]), cell(reading["signal"])))
+        out.extend(indicator_row(indicator, indicator["readings"].get(symbol)) for indicator in data["indicators"])
         out.append("")
-    out.extend(["## Rules and sources", "", "| Indicator | Rule | Source |", "| --- | --- | --- |"])
-    for indicator in data["indicators"]:
+    out.extend(rules_table(data["indicators"]))
+    out.extend(["", "Disclaimer: " + DISCLAIMER])
+    print("\n".join(out))
+
+
+def indicator_row(indicator, reading):
+    """One table row; a missing reading is unavailable, never zero."""
+    if reading is None:
+        return "| {} | n/a | unavailable | n/a |".format(cell(indicator["name"]))
+    value = "{:.2%}".format(reading["value"]) if indicator["unit"] == "percent" else "{:g}".format(reading["value"])
+    return "| {} | {} | {} | {} |".format(cell(indicator["name"]), value, cell(reading["reading"]), cell(reading["signal"]))
+
+
+def rules_table(indicators):
+    out = ["## Rules and sources", "", "| Indicator | Rule | Source |", "| --- | --- | --- |"]
+    for indicator in indicators:
         source = indicator["source"]
         citation = cell(source["label"])
         if source["url"]:
             citation = "[{}]({})".format(citation, source["url"])
         out.append("| {} | {} | {} |".format(cell(indicator["name"]), cell(indicator["rule"]), citation))
-    out.extend(["", "Disclaimer: " + DISCLAIMER])
-    print("\n".join(out))
+    return out
 
 
 def session_count(value):
@@ -216,21 +222,9 @@ def ticker(args):
         "does not validate returns for this instrument.".format(ENDPOINT), "",
         "| Indicator | Value | Reading | Signal |", "| --- | --- | --- | --- |",
     ]
-    for indicator in data["indicators"]:
-        reading = indicator["reading"]
-        if reading is None:
-            out.append("| {} | n/a | unavailable | n/a |".format(cell(indicator["name"])))
-        else:
-            value = "{:.2%}".format(reading["value"]) if indicator["unit"] == "percent" else "{:g}".format(reading["value"])
-            out.append("| {} | {} | {} | {} |".format(
-                cell(indicator["name"]), value, cell(reading["reading"]), cell(reading["signal"])))
-    out.extend(["", "## Rules and sources", "", "| Indicator | Rule | Source |", "| --- | --- | --- |"])
-    for indicator in data["indicators"]:
-        source = indicator["source"]
-        citation = cell(source["label"])
-        if source["url"]:
-            citation = "[{}]({})".format(citation, source["url"])
-        out.append("| {} | {} | {} |".format(cell(indicator["name"]), cell(indicator["rule"]), citation))
+    out.extend(indicator_row(indicator, indicator["reading"]) for indicator in data["indicators"])
+    out.append("")
+    out.extend(rules_table(data["indicators"]))
     out.extend(["", "Server disclaimer: " + cell(data["disclaimer"]), "", "Disclaimer: " + DISCLAIMER])
     print("\n".join(out))
 
