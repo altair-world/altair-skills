@@ -27,6 +27,11 @@ ENDPOINT = os.environ.get("ALTAIR_MCP_URL", "https://altairworld.com/mcp/free")
 INDICES = {"SPX": ("S&P 500", "all"), "NDX": ("Nasdaq-100", "nasdaq100"),
            "SOX": ("PHLX Semiconductor", "sox")}
 ATTEMPTS = 3
+TEMPORARY_TOOL_ERRORS = {
+    "get_market_breadth": "Market breadth is temporarily unavailable. Please try again later.",
+    "get_market_indicators": "Market indicators are temporarily unavailable. Please try again later.",
+    "get_ticker_indicators": "Ticker indicators are temporarily unavailable. Please try again later.",
+}
 DISCLAIMER = ("Market readings for information and AI testing only. They are not financial or investment "
               "advice and may contain errors; do not use them to make investment or trading decisions.")
 HEADERS = {
@@ -69,15 +74,20 @@ def call_tool(name, arguments):
     body = json.dumps(
         {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": arguments}}
     ).encode()
-    # The server is a Cloudflare Worker that sometimes drops a request under load; reads are idempotent.
+    # These tools are read-only. Share one budget across transport failures and
+    # the server's explicit temporary tool errors, rather than nesting retries.
     for attempt in range(ATTEMPTS):
         try:
-            message = post(body)
-            break
+            return tool_data(name, post(body))
         except Transient as error:
             if attempt == ATTEMPTS - 1:
                 raise ToolError("{} failed after {} attempts: {}".format(name, ATTEMPTS, error))
+            print("altair_market: {} temporarily unavailable; retrying (attempt {} of {})".format(
+                name, attempt + 2, ATTEMPTS), file=sys.stderr)
             time.sleep(2 ** attempt)
+
+
+def tool_data(name, message):
     if not isinstance(message, dict):
         raise ToolError("invalid server response: expected a JSON object")
     if "error" in message:
@@ -88,6 +98,8 @@ def call_tool(name, arguments):
         raise ToolError("invalid server response: expected a tool result object")
     if result.get("isError"):
         detail = " ".join(part.get("text", "") for part in result.get("content", []))
+        if name in TEMPORARY_TOOL_ERRORS and detail.strip() == TEMPORARY_TOOL_ERRORS[name]:
+            raise Transient(detail.strip())
         raise ToolError(detail.strip() or "{}: tool error".format(name))
     if result.get("structuredContent") is not None:
         data = result["structuredContent"]
@@ -96,6 +108,8 @@ def call_tool(name, arguments):
     if not isinstance(data, dict):
         raise ToolError("invalid server response: expected tool data object")
     if "error" in data:
+        if name in TEMPORARY_TOOL_ERRORS and data["error"] == TEMPORARY_TOOL_ERRORS[name]:
+            raise Transient(data["error"])
         raise ToolError("{}: {}".format(name, data["error"]))
     return data
 
