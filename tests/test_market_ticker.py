@@ -65,6 +65,51 @@ class TickerCLI(unittest.TestCase):
             self.assertIn(text, result.stdout)
         self.assertEqual(len(requests), 1)
 
+    def test_json_preserves_source_payload_without_display_rounding(self):
+        data = snapshot()
+        data["instrument"]["close"] = 217.941234
+        result, requests = self.run_cli({"result": {"structuredContent": data}}, ["ticker", "nvda", "--json"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)
+        self.assertEqual(output["data"], data)
+        self.assertEqual(output["schemaVersion"], 1)
+        self.assertEqual(output["command"], "ticker")
+        self.assertIn("+00:00", output["fetchedAt"])
+        self.assertIn("not financial", output["disclaimer"])
+        self.assertEqual(len(requests), 1)
+
+    def test_json_index_selection_preserves_null_and_missing_readings(self):
+        data = {"indices": [{"symbol": symbol, "name": symbol, "date": "2026-10-27", "close": 100}
+                            for symbol in ("SPX", "NDX", "SOX")], "indicators": [
+            {"name": "Trend", "unit": "percent", "readings": {"SPX": {"value": 0.1234567, "reading": "Above", "signal": "bullish"}, "NDX": None},
+             "rule": "Rule", "source": {"label": "Source", "url": "https://example.com"}}]}
+        result, requests = self.run_cli({"result": {"structuredContent": data}}, ["indicators", "ndx", "NDX", "sox", "--json"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)["data"]
+        self.assertEqual([index["symbol"] for index in output["indices"]], ["NDX", "SOX"])
+        self.assertEqual(output["indicators"][0]["readings"], {"NDX": None})
+        self.assertEqual(output["indicators"][0]["source"], data["indicators"][0]["source"])
+        self.assertEqual(requests[0]["params"]["arguments"], {})
+
+    def test_json_breadth_history_is_source_data(self):
+        row = {"date": "2026-10-27", "all": 70, "nasdaq100": 60, "sox": None}
+        data = {"movingAverage": 20, "latest": dict(row, benchmarks={"SPX": 100, "NDX": 200, "SOX": None}, sectors=[]), "history": [row]}
+        result, requests = self.run_cli({"result": {"structuredContent": data}}, ["breadth", "--days", "5", "--json"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["data"], data)
+        self.assertEqual(requests[0]["params"]["arguments"], {"days": 5})
+
+    def test_json_errors_never_emit_success_or_partial_document(self):
+        mismatch = snapshot()
+        mismatch["instrument"]["symbol"] = "SPX"
+        for message in ({"result": {"structuredContent": mismatch}},
+                        {"result": {"structuredContent": {}}},
+                        {"result": {"isError": True, "content": [{"text": "Unavailable"}]}}):
+            result, requests = self.run_cli(message, ["ticker", "NVDA", "--json"])
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(len(requests), 1)
+
     def test_unsupported_tool_and_upstream_error_do_not_fallback(self):
         for message in ({"error": {"message": "Unknown tool get_ticker_indicators"}},
                         {"result": {"isError": True, "content": [{"text": "Ticker unavailable"}]}}):

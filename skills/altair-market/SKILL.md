@@ -30,11 +30,14 @@ python3 scripts/altair_market.py breadth --days 5       # also show recent tradi
 python3 scripts/altair_market.py indicators             # SPX NDX SOX
 python3 scripts/altair_market.py indicators NDX SOX     # selected indices
 python3 scripts/altair_market.py ticker NVDA            # one stock or ETF
+python3 scripts/altair_market.py breadth --days 5 --json # structured data for automation
 ```
 
 - `breadth` prints the percentage of eligible constituents above their 20-session SMA for the S&P 500, Nasdaq-100 and PHLX Semiconductor (SOX), their price-index benchmark closes, and an S&P 500 sector table. `--days N` adds 1–252 recent trading sessions of index breadth; without it only the latest readings are shown. History uses the loader's constituent lists, not point-in-time membership.
 - `indicators [SPX|NDX|SOX ...]` prints each selected index's close and table of ten factor indicators plus daily and weekly TD Sequential 9: value, reading and bullish/neutral/bearish label, followed by the rules and sources. With no arguments it covers all three indices. Index symbols accept either case; duplicates are removed. A missing reading is marked unavailable, never zero. Indicators have no date or history parameter.
 - Exit status 1 means the server was unreachable or a tool failed; say so instead of guessing. Invalid arguments or an insecure remote `ALTAIR_MCP_URL` exit 2.
+
+All three commands accept `--json`: one document with `schemaVersion: 1`, `command`, UTC `fetchedAt`, MCP `source`, `data` and `disclaimer`. `data` preserves source values, session dates, rules, URLs and unavailable/null readings without display rounding; index selection filters `indices` and indicator `readings` locally. Breadth includes the returned history even without `--days` (one session requested by default). Errors exit nonzero with a stderr message and no JSON; do not interpret missing output as an empty successful result. Default output remains Markdown.
 
 `ticker SYMBOL` calls `get_ticker_indicators { ticker: "NVDA" }` for one Yahoo Finance symbol, e.g. `NVDA`, `BRK-B` or `0700.HK`, case-insensitive. Use this command for individual stocks, not the index-only `indicators` command. It prints latest-only indicators, rules and sources; use `instrument.date` as the session date, not `generatedAt` or `asOf`. The latest session may still be open. Missing implied volatility and variance risk premium remain unavailable, never replaced with index readings. Shared macro readings are market context, not measurements of the stock. Historical S&P 500/Nasdaq-100 evidence is not validated returns for this instrument. If the server lacks the tool, say so; never fall back to index data.
 
