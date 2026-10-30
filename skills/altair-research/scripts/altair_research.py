@@ -316,6 +316,77 @@ def report(args):
     print("\nDisclaimer: " + DISCLAIMER)
 
 
+def catalog_pages(value):
+    try:
+        pages = int(value)
+        if 1 <= pages <= 10:
+            return pages
+    except ValueError:
+        pass
+    raise argparse.ArgumentTypeError("expected 1–10 pages")
+
+
+def dates(args):
+    tickers = normalize([args.ticker])
+    if len(tickers) != 1:
+        raise ValueError("dates requires exactly one ticker")
+    ticker = tickers[0]
+    reports, total = [], None
+    for _ in range(args.max_pages):
+        page = call_tool("list_research_reports", {"ticker": ticker, "limit": 100, "offset": len(reports)})
+        count, rows = page["total"], page["reports"]
+        if type(count) is not int or count < 0 or not isinstance(rows, list) or len(rows) > 100:
+            raise ValueError("invalid report catalog")
+        if total is not None and total != count:
+            raise ToolError("Research catalog changed during pagination; please try again.")
+        total = count
+        if len(reports) + len(rows) > total or (not rows and len(reports) < total):
+            raise ValueError("incomplete report catalog page")
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("ticker"), str) or row["ticker"].upper() != ticker or not isinstance(row["model"], str) or not row["model"].strip():
+                raise ValueError("report metadata does not match ticker")
+            try:
+                analysis_date(row["date"])
+            except argparse.ArgumentTypeError as error:
+                raise ValueError(str(error))
+            if not isinstance(row["url"], str):
+                raise ValueError("invalid report source URL")
+            source = urllib.parse.urlsplit(row["url"])
+            if not source.hostname or not (source.scheme == "https" or
+                    (source.scheme == "http" and source.hostname in ("localhost", "127.0.0.1"))):
+                raise ValueError("invalid report source URL")
+        if {row["url"] for row in reports}.intersection(row["url"] for row in rows) or len({row["url"] for row in rows}) != len(rows):
+            raise ToolError("Research catalog repeated reports during pagination; please try again.")
+        reports.extend(rows)
+        if len(reports) == total:
+            break
+    grouped = {}
+    for row in reports:
+        group = grouped.setdefault(row["date"], {"date": row["date"], "models": set(), "reports": 0})
+        group["models"].add(row["model"])
+        group["reports"] += 1
+    entries = [dict(grouped[day], models=sorted(grouped[day]["models"])) for day in sorted(grouped, reverse=True)]
+    complete = len(reports) == total
+    if args.json:
+        print(json.dumps({"schemaVersion": 1, "command": "dates", "ticker": ticker,
+            "fetchedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(), "source": ENDPOINT,
+            "totalReports": total, "scannedReports": len(reports), "complete": complete,
+            "dates": entries, "disclaimer": DISCLAIMER}))
+        return
+    out = ["# {} · available analysis dates".format(ticker), "",
+           "Scanned {} of {} report runs. Counts include same-date reruns; models are exact names.".format(len(reports), total), "",
+           "| Analysis date | Models | Report runs |", "| --- | --- | --- |"]
+    for entry in entries:
+        models = ", ".join(entry["models"]).replace("|", "\\|").replace("\n", " ")
+        out.append("| {} | {} | {} |".format(entry["date"], models, entry["reports"]))
+    if not total:
+        out.append("No published research for {}. Use `tickers` to see coverage.".format(ticker))
+    if not complete:
+        out.append("Partial catalog: dates and model lists may be incomplete. Increase --max-pages (up to 10); do not infer absent dates have no reports.")
+    out.extend(["", "Use `latest {} --date YYYY-MM-DD` to read a listed date. Analysis dates are not live market sessions.".format(ticker), "", "Disclaimer: " + DISCLAIMER])
+    print("\n".join(out))
+
+
 def analysis_date(value):
     try:
         if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
@@ -340,6 +411,11 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     tickers_parser = commands.add_parser("tickers", help="covered tickers with report counts")
     tickers_parser.set_defaults(run=tickers)
+    dates_parser = commands.add_parser("dates", help="available analysis dates and model names for one ticker")
+    dates_parser.add_argument("ticker", help="one covered ticker, e.g. NVDA")
+    dates_parser.add_argument("--max-pages", type=catalog_pages, default=3, help="scan up to 1–10 pages of 100 report metadata rows (default: 3)")
+    dates_parser.add_argument("--json", action="store_true", help="versioned date catalog with explicit completeness")
+    dates_parser.set_defaults(run=dates)
     latest_parser = commands.add_parser("latest", help="final decisions from every model on the newest analysis date")
     latest_parser.add_argument("tickers", nargs="*",
                                help="tickers, space- or comma-separated (default: {})".format(" ".join(INDEX_TICKERS)))
@@ -360,6 +436,8 @@ def main():
     args = parser.parse_args()
     if args.command in ("latest", "changes") and args.tickers and not normalize(args.tickers):
         parser.error("provide at least one ticker, or omit tickers for the index ETFs")
+    if args.command == "dates" and len(normalize([args.ticker])) != 1:
+        parser.error("dates requires exactly one ticker")
     try:
         endpoint = urllib.parse.urlsplit(ENDPOINT)
         valid_endpoint = bool(endpoint.hostname) and (
