@@ -127,9 +127,14 @@ python3 skills/altair-market/scripts/altair_market.py breadth --days 5
 python3 skills/altair-market/scripts/altair_market.py indicators
 python3 skills/altair-market/scripts/altair_market.py indicators NDX SOX
 python3 skills/altair-market/scripts/altair_market.py ticker NVDA
+python3 skills/altair-market/scripts/altair_market.py breadth --days 5 --json
 ```
 
 `breadth` shows the latest index and sector readings; `--days N` also shows 1–252 recent trading sessions. `indicators` defaults to all three indices, accepts either case and removes duplicates. Indicators have no date or history parameter. Missing readings are shown as unavailable. Server or tool failures exit 1; invalid arguments or an insecure remote endpoint exit 2.
+
+All market commands accept `--json` for automation. Output is one document with `schemaVersion: 1`, `command`, UTC `fetchedAt`, MCP endpoint `source`, `data` and `disclaimer`. Source numbers are not display-rounded; dates, rules, URLs, nulls and unavailable readings are preserved. Index selection filters the returned indices and their readings locally. Breadth JSON includes returned history (one session by default). Errors exit nonzero with stderr and no JSON. Without `--json`, Markdown output is unchanged.
+
+Read-only market calls make at most three attempts total across temporary HTTP/network failures and the matching tool's explicit temporary-service-unavailable error, waiting one then two seconds between retries. Retry notices go to stderr, keeping JSON stdout machine-readable. Unknown tools, invalid input, malformed responses and other tool errors are not retried. Exhausted retries still exit 1 with no partial output; this mitigates transient failures, not persistent backend outages.
 
 `ticker SYMBOL` reads latest-only indicators for one Yahoo Finance stock, ETF or other symbol, e.g. `NVDA`, `BRK-B` or `0700.HK` (case-insensitive), through the free read-only `get_ticker_indicators` tool. The request sends only that symbol. It preserves the instrument's session date, rules, sources and unavailable readings; it never substitutes index readings for missing stock implied volatility or variance risk premium. Shared macro readings are market context, not stock-specific measurements. Historical index evidence does not validate returns for this instrument. The latest session may still be open. A server without the tool returns an explicit error.
 

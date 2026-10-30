@@ -13,6 +13,7 @@ Set ALTAIR_MCP_URL to an HTTPS deployment; HTTP is allowed only for localhost/12
 """
 
 import argparse
+import datetime
 import json
 import os
 import re
@@ -26,6 +27,11 @@ ENDPOINT = os.environ.get("ALTAIR_MCP_URL", "https://altairworld.com/mcp/free")
 INDICES = {"SPX": ("S&P 500", "all"), "NDX": ("Nasdaq-100", "nasdaq100"),
            "SOX": ("PHLX Semiconductor", "sox")}
 ATTEMPTS = 3
+TEMPORARY_TOOL_ERRORS = {
+    "get_market_breadth": "Market breadth is temporarily unavailable. Please try again later.",
+    "get_market_indicators": "Market indicators are temporarily unavailable. Please try again later.",
+    "get_ticker_indicators": "Ticker indicators are temporarily unavailable. Please try again later.",
+}
 DISCLAIMER = ("Market readings for information and AI testing only. They are not financial or investment "
               "advice and may contain errors; do not use them to make investment or trading decisions.")
 HEADERS = {
@@ -68,15 +74,20 @@ def call_tool(name, arguments):
     body = json.dumps(
         {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": arguments}}
     ).encode()
-    # The server is a Cloudflare Worker that sometimes drops a request under load; reads are idempotent.
+    # These tools are read-only. Share one budget across transport failures and
+    # the server's explicit temporary tool errors, rather than nesting retries.
     for attempt in range(ATTEMPTS):
         try:
-            message = post(body)
-            break
+            return tool_data(name, post(body))
         except Transient as error:
             if attempt == ATTEMPTS - 1:
                 raise ToolError("{} failed after {} attempts: {}".format(name, ATTEMPTS, error))
+            print("altair_market: {} temporarily unavailable; retrying (attempt {} of {})".format(
+                name, attempt + 2, ATTEMPTS), file=sys.stderr)
             time.sleep(2 ** attempt)
+
+
+def tool_data(name, message):
     if not isinstance(message, dict):
         raise ToolError("invalid server response: expected a JSON object")
     if "error" in message:
@@ -87,6 +98,8 @@ def call_tool(name, arguments):
         raise ToolError("invalid server response: expected a tool result object")
     if result.get("isError"):
         detail = " ".join(part.get("text", "") for part in result.get("content", []))
+        if name in TEMPORARY_TOOL_ERRORS and detail.strip() == TEMPORARY_TOOL_ERRORS[name]:
+            raise Transient(detail.strip())
         raise ToolError(detail.strip() or "{}: tool error".format(name))
     if result.get("structuredContent") is not None:
         data = result["structuredContent"]
@@ -95,6 +108,8 @@ def call_tool(name, arguments):
     if not isinstance(data, dict):
         raise ToolError("invalid server response: expected tool data object")
     if "error" in data:
+        if name in TEMPORARY_TOOL_ERRORS and data["error"] == TEMPORARY_TOOL_ERRORS[name]:
+            raise Transient(data["error"])
         raise ToolError("{}: {}".format(name, data["error"]))
     return data
 
@@ -109,6 +124,17 @@ def percent(value):
 
 def number(value):
     return "n/a" if value is None else "{:,.2f}".format(value)
+
+
+def output(args, data, markdown):
+    if args.json:
+        print(json.dumps({
+            "schemaVersion": 1, "command": args.command,
+            "fetchedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "source": ENDPOINT, "data": data, "disclaimer": DISCLAIMER,
+        }, allow_nan=False))
+    else:
+        print("\n".join(markdown))
 
 
 def breadth(args):
@@ -139,7 +165,7 @@ def breadth(args):
                 row["date"], percent(row["all"]), percent(row["nasdaq100"]), percent(row["sox"])))
         out.extend(["", "History uses the loader's constituent lists, not point-in-time membership."])
     out.extend(["", "Disclaimer: " + DISCLAIMER])
-    print("\n".join(out))
+    output(args, data, out)
 
 
 def indicators(args):
@@ -168,7 +194,12 @@ def indicators(args):
         out.append("")
     out.extend(rules_table(data["indicators"]))
     out.extend(["", "Disclaimer: " + DISCLAIMER])
-    print("\n".join(out))
+    selected_data = dict(data, indices=[by_symbol[symbol] for symbol in selected], indicators=[
+        dict(indicator, readings={symbol: indicator["readings"][symbol]
+                                  for symbol in selected if symbol in indicator["readings"]})
+        for indicator in data["indicators"]
+    ])
+    output(args, selected_data, out)
 
 
 def indicator_row(indicator, reading):
@@ -226,7 +257,7 @@ def ticker(args):
     out.append("")
     out.extend(rules_table(data["indicators"]))
     out.extend(["", "Server disclaimer: " + cell(data["disclaimer"]), "", "Disclaimer: " + DISCLAIMER])
-    print("\n".join(out))
+    output(args, data, out)
 
 
 def index_symbol(value):
@@ -249,6 +280,8 @@ def main():
     ticker_parser = commands.add_parser("ticker", help="latest indicators for one stock, ETF or Yahoo Finance symbol")
     ticker_parser.add_argument("symbol", type=ticker_symbol, help="e.g. NVDA, BRK-B or 0700.HK")
     ticker_parser.set_defaults(run=ticker)
+    for command in (breadth_parser, indicators_parser, ticker_parser):
+        command.add_argument("--json", action="store_true", help="versioned JSON with source values, dates and unavailable readings")
     args = parser.parse_args()
     try:
         endpoint = urllib.parse.urlsplit(ENDPOINT)
