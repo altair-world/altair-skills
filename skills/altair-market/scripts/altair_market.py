@@ -8,6 +8,8 @@ Standard library only (Python 3.8+). No API key, no MCP client setup.
   python3 altair_market.py indicators                # SPX NDX SOX, including TD Sequential 9
   python3 altair_market.py indicators NDX SOX         # selected indices
   python3 altair_market.py ticker NVDA                # one Yahoo Finance symbol
+  python3 altair_market.py alerts                    # rules whose label changed at the latest session
+  python3 altair_market.py alerts SPY QQQ            # the same for indices or Yahoo Finance symbols
 
 Set ALTAIR_MCP_URL to an HTTPS deployment; HTTP is allowed only for localhost/127.0.0.1.
 """
@@ -260,6 +262,97 @@ def ticker(args):
     output(args, data, out)
 
 
+def alert_readings(symbols):
+    """Each symbol's session date and (indicator, reading) pairs, plus (symbol, error) for symbols that failed."""
+    read, failed = {}, []
+    indices = [symbol for symbol in symbols if symbol in INDICES]
+    index_data, index_error = None, None
+    if indices:
+        try:
+            index_data = call_tool("get_market_indicators", {})
+        except ToolError as error:
+            index_error = str(error)
+    for symbol in symbols:
+        if symbol in INDICES:
+            if index_data is None:
+                failed.append((symbol, index_error))
+                continue
+            index = next((item for item in index_data["indices"] if item["symbol"] == symbol), None)
+            if index is None:
+                failed.append((symbol, "No indicator data for {}".format(symbol)))
+                continue
+            read[symbol] = (index["date"], [(indicator, indicator["readings"].get(symbol)) for indicator in index_data["indicators"]])
+            continue
+        try:
+            data = call_tool("get_ticker_indicators", {"ticker": symbol})
+        except ToolError as error:
+            failed.append((symbol, str(error)))
+            continue
+        if data["instrument"]["symbol"] != symbol:
+            raise ToolError("invalid server response: ticker does not match requested symbol")
+        read[symbol] = (data["instrument"]["date"], [(indicator, indicator["reading"]) for indicator in data["indicators"]])
+    return read, failed
+
+
+def alerts(args):
+    symbols = list(dict.fromkeys(args.symbols or INDICES))
+    read, failed = alert_readings(symbols)
+    if not read:
+        raise ToolError("no symbol could be read: {}".format("; ".join("{}: {}".format(*item) for item in failed)))
+    if any(reading is not None and "previous" not in reading for _, rows in read.values() for _, reading in rows):
+        raise ToolError("this server does not return previous-session readings yet; alerts need the updated "
+                        "get_market_indicators and get_ticker_indicators tools")
+    results = []
+    for symbol in symbols:
+        if symbol not in read:
+            continue
+        date, rows = read[symbol]
+        result = {"symbol": symbol, "date": date, "turned": [], "backToNeutral": [], "noComparison": []}
+        for indicator, reading in rows:
+            entry = {"id": indicator["id"], "name": indicator["name"], "reading": reading}
+            if reading is None or reading["previous"] is None:
+                result["noComparison"].append(entry)
+            elif reading["previous"]["signal"] != reading["signal"]:
+                result["turned" if reading["signal"] != "neutral" else "backToNeutral"].append(entry)
+        results.append(result)
+    dates = sorted({result["date"] for result in results})
+    out = [
+        "# Altair indicator alerts · {} · reading date {}".format(
+            ", ".join(result["symbol"] for result in results), ", ".join(dates)), "",
+        "Source: https://altairworld.com/indicators through the public MCP server {}. "
+        "An alert is a rule whose bullish/neutral/bearish label at the latest session differs from the previous "
+        "session's. Values are from the last available close, not live quotes; during trading hours the latest "
+        "session can still be open, so a change can reverse by the close. Labels describe rules, not forecasts or "
+        "buy/sell instructions; several rules are contrarian.".format(ENDPOINT), "",
+        "## Turned bullish or bearish", "",
+    ]
+    turned = [(result["symbol"], entry) for result in results for entry in result["turned"]]
+    if turned:
+        out.extend(["| Symbol | Indicator | Was | Now | Reading |", "| --- | --- | --- | --- | --- |"])
+        out.extend("| {} | {} | {} on {} | {} | {} |".format(
+            cell(symbol), cell(entry["name"]), cell(entry["reading"]["previous"]["signal"]),
+            cell(entry["reading"]["previous"]["date"]), cell(entry["reading"]["signal"]), cell(entry["reading"]["reading"]))
+            for symbol, entry in turned)
+    else:
+        out.append("No rule turned bullish or bearish at the latest session.")
+    neutral = [(result["symbol"], entry) for result in results for entry in result["backToNeutral"]]
+    if neutral:
+        out.extend(["", "## Back to neutral", "", "| Symbol | Indicator | Was | Reading |", "| --- | --- | --- | --- |"])
+        out.extend("| {} | {} | {} on {} | {} |".format(
+            cell(symbol), cell(entry["name"]), cell(entry["reading"]["previous"]["signal"]),
+            cell(entry["reading"]["previous"]["date"]), cell(entry["reading"]["reading"])) for symbol, entry in neutral)
+    unknown = [result for result in results if result["noComparison"]]
+    if unknown:
+        out.extend(["", "## No comparison", "", "Unavailable at the latest or previous session, so not counted as unchanged:"])
+        out.extend("- {}: {}".format(result["symbol"], ", ".join(cell(entry["name"]) for entry in result["noComparison"]))
+                   for result in unknown)
+    if failed:
+        out.extend(["", "## Unavailable symbols", ""])
+        out.extend("- {}: {}".format(symbol, cell(error)) for symbol, error in failed)
+    out.extend(["", "Disclaimer: " + DISCLAIMER])
+    output(args, {"symbols": results, "unavailable": [{"symbol": symbol, "error": error} for symbol, error in failed]}, out)
+
+
 def index_symbol(value):
     symbol = value.upper()
     if symbol not in INDICES:
@@ -280,9 +373,15 @@ def main():
     ticker_parser = commands.add_parser("ticker", help="latest indicators for one stock, ETF or Yahoo Finance symbol")
     ticker_parser.add_argument("symbol", type=ticker_symbol, help="e.g. NVDA, BRK-B or 0700.HK")
     ticker_parser.set_defaults(run=ticker)
-    for command in (breadth_parser, indicators_parser, ticker_parser):
+    alerts_parser = commands.add_parser("alerts", help="indicator rules whose label changed at the latest session")
+    alerts_parser.add_argument("symbols", nargs="*", type=ticker_symbol, metavar="SYMBOL",
+                               help="SPX, NDX, SOX or Yahoo Finance symbols (default: SPX NDX SOX)")
+    alerts_parser.set_defaults(run=alerts)
+    for command in (breadth_parser, indicators_parser, ticker_parser, alerts_parser):
         command.add_argument("--json", action="store_true", help="versioned JSON with source values, dates and unavailable readings")
     args = parser.parse_args()
+    if args.command == "alerts" and len(set(args.symbols)) > 10:
+        parser.error("alerts takes at most 10 symbols")
     try:
         endpoint = urllib.parse.urlsplit(ENDPOINT)
         valid_endpoint = bool(endpoint.hostname) and (
