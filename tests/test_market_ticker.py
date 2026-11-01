@@ -22,14 +22,16 @@ def snapshot():
 
 
 class TickerCLI(unittest.TestCase):
-    def run_cli(self, message, arguments=None):
+    def run_cli(self, message, arguments=None, sequence=None):
         requests = []
 
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
                 requests.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
-                body = json.dumps(message).encode()
-                self.send_response(200)
+                payload = sequence[min(len(requests) - 1, len(sequence) - 1)] if sequence else message
+                status, payload = payload if isinstance(payload, tuple) else (200, payload)
+                body = json.dumps(payload).encode()
+                self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(body)
@@ -50,6 +52,86 @@ class TickerCLI(unittest.TestCase):
             thread.join(timeout=2)
         return result, requests
 
+    def test_temporary_tool_failures_recover_for_all_read_only_market_commands(self):
+        row = {"date": "2026-10-27", "all": 70, "nasdaq100": 60, "sox": 50}
+        breadth = {"movingAverage": 20, "latest": dict(row, benchmarks={"SPX": 100, "NDX": 200, "SOX": 300}, sectors=[]), "history": [row]}
+        indices = {"indices": [{"symbol": "SPX", "name": "S&P 500", "date": "2026-10-27", "close": 100}], "indicators": []}
+        cases = [(["breadth", "--json"], "get_market_breadth", "Market breadth is", breadth),
+                 (["indicators", "SPX", "--json"], "get_market_indicators", "Market indicators are", indices),
+                 (["ticker", "NVDA", "--json"], "get_ticker_indicators", "Ticker indicators are", snapshot())]
+        for args, tool, label, data in cases:
+            with self.subTest(tool=tool):
+                temporary = {"result": {"isError": True, "content": [{"text": label + " temporarily unavailable. Please try again later."}]}}
+                result, requests = self.run_cli({}, args, sequence=[temporary, {"result": {"structuredContent": data}}])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout)["data"], data)
+                self.assertEqual(len(requests), 2)
+                self.assertEqual(requests[0], requests[1])
+                self.assertIn("attempt 2 of 3", result.stderr)
+                self.assertNotIn("attempt 3", result.stderr)
+
+    def test_temporary_error_recovery_preserves_markdown(self):
+        temporary = {"result": {"isError": True, "content": [{"text": "Ticker indicators are temporarily unavailable. Please try again later."}]}}
+        result, requests = self.run_cli({}, ["ticker", "NVDA"], sequence=[temporary, {"result": {"structuredContent": snapshot()}}])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.startswith("# Altair ticker indicators · NVDA"))
+        self.assertIn("not financial", result.stdout)
+        self.assertEqual(len(requests), 2)
+        self.assertIn("attempt 2 of 3", result.stderr)
+
+    def test_persistent_tool_failure_exhausts_budget_without_partial_json_or_markdown(self):
+        temporary = {"result": {"isError": True, "content": [{"text": "Ticker indicators are temporarily unavailable. Please try again later."}]}}
+        for args in (["ticker", "NVDA", "--json"], ["ticker", "NVDA"]):
+            with self.subTest(args=args):
+                result, requests = self.run_cli(temporary, args)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(len(requests), 3)
+                self.assertIn("failed after 3 attempts", result.stderr)
+                self.assertEqual(result.stderr.count("retrying"), 2)
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_http_and_tool_errors_share_one_three_attempt_budget(self):
+        temporary = {"result": {"isError": True, "content": [{"text": "Ticker indicators are temporarily unavailable. Please try again later."}]}}
+        success = {"result": {"structuredContent": snapshot()}}
+        for third, expected in ((success, 0), (temporary, 1)):
+            with self.subTest(expected=expected):
+                result, requests = self.run_cli({}, ["ticker", "NVDA", "--json"], sequence=[(503, {}), temporary, third, success])
+                self.assertEqual(result.returncode, expected, result.stderr)
+                self.assertEqual(len(requests), 3)
+                self.assertEqual(result.stderr.count("retrying"), 2)
+                if expected:
+                    self.assertEqual(result.stdout, "")
+                else:
+                    self.assertEqual(json.loads(result.stdout)["data"], snapshot())
+
+    def test_structured_temporary_error_recovers_without_iserror_flag(self):
+        result, requests = self.run_cli({}, ["ticker", "NVDA", "--json"], sequence=[
+            {"result": {"structuredContent": {"error": "Ticker indicators are temporarily unavailable. Please try again later."}}},
+            {"result": {"structuredContent": snapshot()}},
+        ])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["data"], snapshot())
+        self.assertEqual(len(requests), 2)
+
+    def test_nonretryable_errors_and_malformed_responses_fail_immediately(self):
+        failures = [
+            {"error": {"code": -32602, "message": "Invalid arguments"}},
+            {"result": {"isError": True, "content": [{"text": "Unknown tool get_ticker_indicators"}]}},
+            {"result": {"isError": True, "content": [{"text": "Yahoo Finance has no daily closes for NVDA"}]}},
+            {"result": {"isError": True, "content": [{"text": "Market breadth is temporarily unavailable. Please try again later."}]}},
+            {"result": {"structuredContent": {}}}, {"result": None},
+            (401, {}),
+        ]
+        for failure in failures:
+            with self.subTest(failure=failure):
+                result, requests = self.run_cli({}, ["ticker", "NVDA", "--json"], sequence=[failure, {"result": {"structuredContent": snapshot()}}])
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(len(requests), 1)
+                self.assertNotIn("retrying", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
     def test_latest_sources_nulls_and_context(self):
         result, requests = self.run_cli({"result": {"structuredContent": snapshot()}})
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -64,6 +146,51 @@ class TickerCLI(unittest.TestCase):
                      "not measurements of this stock", "does not validate returns"):
             self.assertIn(text, result.stdout)
         self.assertEqual(len(requests), 1)
+
+    def test_json_preserves_source_payload_without_display_rounding(self):
+        data = snapshot()
+        data["instrument"]["close"] = 217.941234
+        result, requests = self.run_cli({"result": {"structuredContent": data}}, ["ticker", "nvda", "--json"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)
+        self.assertEqual(output["data"], data)
+        self.assertEqual(output["schemaVersion"], 1)
+        self.assertEqual(output["command"], "ticker")
+        self.assertIn("+00:00", output["fetchedAt"])
+        self.assertIn("not financial", output["disclaimer"])
+        self.assertEqual(len(requests), 1)
+
+    def test_json_index_selection_preserves_null_and_missing_readings(self):
+        data = {"indices": [{"symbol": symbol, "name": symbol, "date": "2026-10-27", "close": 100}
+                            for symbol in ("SPX", "NDX", "SOX")], "indicators": [
+            {"name": "Trend", "unit": "percent", "readings": {"SPX": {"value": 0.1234567, "reading": "Above", "signal": "bullish"}, "NDX": None},
+             "rule": "Rule", "source": {"label": "Source", "url": "https://example.com"}}]}
+        result, requests = self.run_cli({"result": {"structuredContent": data}}, ["indicators", "ndx", "NDX", "sox", "--json"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)["data"]
+        self.assertEqual([index["symbol"] for index in output["indices"]], ["NDX", "SOX"])
+        self.assertEqual(output["indicators"][0]["readings"], {"NDX": None})
+        self.assertEqual(output["indicators"][0]["source"], data["indicators"][0]["source"])
+        self.assertEqual(requests[0]["params"]["arguments"], {})
+
+    def test_json_breadth_history_is_source_data(self):
+        row = {"date": "2026-10-27", "all": 70, "nasdaq100": 60, "sox": None}
+        data = {"movingAverage": 20, "latest": dict(row, benchmarks={"SPX": 100, "NDX": 200, "SOX": None}, sectors=[]), "history": [row]}
+        result, requests = self.run_cli({"result": {"structuredContent": data}}, ["breadth", "--days", "5", "--json"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["data"], data)
+        self.assertEqual(requests[0]["params"]["arguments"], {"days": 5})
+
+    def test_json_errors_never_emit_success_or_partial_document(self):
+        mismatch = snapshot()
+        mismatch["instrument"]["symbol"] = "SPX"
+        for message in ({"result": {"structuredContent": mismatch}},
+                        {"result": {"structuredContent": {}}},
+                        {"result": {"isError": True, "content": [{"text": "Unavailable"}]}}):
+            result, requests = self.run_cli(message, ["ticker", "NVDA", "--json"])
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(len(requests), 1)
 
     def test_unsupported_tool_and_upstream_error_do_not_fallback(self):
         for message in ({"error": {"message": "Unknown tool get_ticker_indicators"}},
