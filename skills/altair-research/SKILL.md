@@ -25,6 +25,7 @@ Use Python 3.8+ (standard library only). The script is in this skill's `scripts/
 
 ```bash
 python3 scripts/altair_research.py tickers                       # covered tickers and report counts
+python3 scripts/altair_research.py dates NVDA                    # available dates and exact model names
 python3 scripts/altair_research.py latest                        # SPY QQQ SOXX XBI
 python3 scripts/altair_research.py latest NVDA AMD               # any covered tickers
 python3 scripts/altair_research.py latest TSLA --date 2026-10-14 # an earlier analysis date
@@ -34,6 +35,7 @@ python3 scripts/altair_research.py report <report-url> --section risk
 ```
 
 - `tickers` lists every covered ticker with its report count, index ETFs first.
+- `dates TICKER [--max-pages N] [--json]` discovers published analysis dates and exact model names without reading report bodies. It scans up to three pages of 100 metadata rows by default (1–10 pages allowed), groups reruns by date and shows report-run counts. JSON includes `totalReports`, `scannedReports`, `complete` and grouped `dates`; check `complete` before inferring absence. Partial catalogs can omit dates or models; increase `--max-pages` rather than guessing. Dates are sorted newest first only within the scanned results; pagination order does not guarantee the newest date was scanned. A changing/repeating catalog fails explicitly. No coverage returns an empty complete catalog, not an invented date. Use a returned date with `latest TICKER --date YYYY-MM-DD`.
 - `latest [TICKER ...]` prints one block per ticker for its newest analysis date: a table with each model's final rating, report-time close, target, target vs close, confidence and horizon, then each model's executive summary. Tickers may be space- or comma-separated, any case, with or without `$`. With no ticker arguments it covers the four index ETFs; an explicitly empty ticker list is an input error. `--date` requires a valid `YYYY-MM-DD` date. `--summary-chars N` sets summary length (default 600); 0 hides summaries, and negative values are rejected.
 - `report` prints one section of a report URL from `latest`: `pm` (portfolio manager, default), `analysts` (technical, sentiment, news, fundamentals), `research` (bull/bear debate), `trader`, `risk`, or `full` (150–300 KB; avoid unless asked).
 - `latest` and `changes` support `--json` when structured output is requested. The versioned envelope includes UTC fetch time, endpoint, requested date, unmodified server results, explicit per-ticker errors and disclaimer. Source prices remain report-time text, not live numbers. Summaries are not truncated. Inspect `errors` even on exit 0 (partial success); all ticker failures exit 1. Invalid input/malformed responses use stderr and do not emit partial JSON. Default output remains Markdown.
