@@ -6,8 +6,8 @@ Standard library only (Python 3.8+). No API key, no MCP client setup.
   python3 altair_market.py breadth                   # latest index and sector breadth
   python3 altair_market.py breadth --days 5          # also show recent trading sessions
   python3 altair_market.py indicators                # SPX NDX SOX, including TD Sequential 9
-  python3 altair_market.py indicators NDX SOX         # selected indices
-  python3 altair_market.py ticker NVDA                # one Yahoo Finance symbol
+  python3 altair_market.py indicators NDX SOX        # selected indices
+  python3 altair_market.py ticker NVDA               # one Yahoo Finance symbol
   python3 altair_market.py alerts                    # rules whose label changed at the latest session
   python3 altair_market.py alerts SPY QQQ            # the same for indices or Yahoo Finance symbols
 

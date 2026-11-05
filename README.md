@@ -51,6 +51,7 @@ For Codex, the skills CLI installs the selected skill; no separately configured 
 
 ```bash
 python3 skills/altair-research/scripts/altair_research.py tickers
+python3 skills/altair-research/scripts/altair_research.py dates NVDA
 python3 skills/altair-research/scripts/altair_research.py latest
 python3 skills/altair-research/scripts/altair_research.py latest NVDA AMD --date 2026-10-14
 python3 skills/altair-research/scripts/altair_research.py changes AAPL NVDA
@@ -165,16 +166,17 @@ Research reports are AI-generated, and market readings are computed from public 
 
 ## Contributing
 
-Changes reach `main` only through pull requests that pass the `check` workflow: offline Claude/Codex package validation, then both scripts against the live MCP server on Python 3.8 and 3.13. Add the `auto-merge` label to a pull request and it squash-merges once `check` passes. If a server change is not deployed yet, `check` fails; re-run it after the deploy.
+Changes reach `main` only through pull requests that pass the `check` workflow: offline Claude/Codex package validation and regression tests, then both scripts against the live MCP server on Python 3.8 and 3.13. Add the `auto-merge` label to a pull request and it squash-merges once `check` passes. If a server change is not deployed yet, `check` fails; re-run it after the deploy.
 
-Run the offline checks locally with no installation or network requests:
+Run the offline checks locally with no installation or external network requests:
 
 ```bash
 python3 scripts/validate_package.py
 python3 -m unittest discover -s scripts -p 'test_*.py' -v
+python3 -m unittest discover -s tests -v
 ```
 
-These checks resolve paths from the plugin root, confirm that both clients package both advertised skills, check runnable script/icon resources and version alignment, and require the shared credential-free `/mcp/free` connection. They are repository contract checks, not a substitute for client-native validation or actual agent execution. No skill behavior changes or version bump are needed for packaging checks alone.
+The last command runs both CLIs against mocks and loopback servers. The package checks resolve paths from the plugin root, confirm that both clients package both advertised skills, check runnable script/icon resources and version alignment, and require the shared credential-free `/mcp/free` connection. They are repository contract checks, not a substitute for client-native validation or actual agent execution. No skill behavior changes or version bump are needed for packaging checks alone.
 
 The contract also checks Claude manifest and marketplace component declarations. Those may use the shared `./skills/` and `./.mcp.json` paths; other overrides require a deliberate validator update rather than passing uninspected. Referenced helpers must be files, not merely existing paths. This is intentionally narrower than the full set of configurations the clients support.
 
