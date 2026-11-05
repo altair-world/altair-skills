@@ -4,9 +4,11 @@
 Standard library only (Python 3.8+). No API key, no MCP client setup.
 
   python3 altair_research.py tickers                   # covered tickers and report counts
+  python3 altair_research.py dates NVDA                # available analysis dates and model names
   python3 altair_research.py latest                    # SPY QQQ SOXX XBI, newest analysis date
   python3 altair_research.py latest NVDA AAPL          # any covered ticker
   python3 altair_research.py latest SPY --date 2026-10-14
+  python3 altair_research.py changes AAPL NVDA         # same-model rating changes
   python3 altair_research.py report <url> [--section pm|analysts|research|trader|risk|full]
 
 Set ALTAIR_MCP_URL to an HTTPS deployment; HTTP is allowed only for localhost/127.0.0.1.
@@ -327,10 +329,7 @@ def catalog_pages(value):
 
 
 def dates(args):
-    tickers = normalize([args.ticker])
-    if len(tickers) != 1:
-        raise ValueError("dates requires exactly one ticker")
-    ticker = tickers[0]
+    ticker = normalize([args.ticker])[0]  # main() already rejected anything but one ticker
     reports, total = [], None
     for _ in range(args.max_pages):
         page = call_tool("list_research_reports", {"ticker": ticker, "limit": 100, "offset": len(reports)})
@@ -425,7 +424,7 @@ def main():
                                help="executive summary length per model; 0 hides summaries (default %(default)s)")
     latest_parser.set_defaults(run=latest)
     changes_parser = commands.add_parser("changes", help="same-model rating changes versus the nearest earlier analysis date")
-    changes_parser.add_argument("tickers", nargs="*", help="tickers (default: SPY QQQ SOXX XBI)")
+    changes_parser.add_argument("tickers", nargs="*", help="tickers (default: {})".format(" ".join(INDEX_TICKERS)))
     changes_parser.add_argument("--date", type=analysis_date, help="analysis date YYYY-MM-DD instead of the newest")
     changes_parser.add_argument("--json", action="store_true", help="versioned JSON with decisions, comparisons and explicit errors")
     changes_parser.set_defaults(run=changes)

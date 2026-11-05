@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import pathlib
 import unittest
 from unittest import mock
@@ -29,6 +30,7 @@ class InvalidServerResponseTests(unittest.TestCase):
                     response.headers = {"Content-Type": "application/json"}
                     with mock.patch.object(research.urllib.request, "urlopen", return_value=response), \
                             mock.patch("sys.argv", [str(SCRIPT)] + command), \
+                            mock.patch("sys.stdout", io.StringIO()), \
                             self.assertRaisesRegex(SystemExit, "altair_research: invalid server response:"):
                         research.main()
 

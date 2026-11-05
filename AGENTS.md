@@ -11,6 +11,7 @@ Notes for agents working on this repo. Edit this file; `CLAUDE.md` imports it.
 ## Changing a skill
 
 - Scripts use the standard library only and must run on Python 3.8.
+- Run the offline checks: `python3 scripts/validate_package.py`, `python3 -m unittest discover -s scripts -p 'test_*.py'` and `python3 -m unittest discover -s tests`.
 - Verify against the live server: `python3 skills/altair-research/scripts/altair_research.py tickers` and `latest SPY NVDA`. Set `ALTAIR_MCP_URL` to test against a preview deployment.
 - For altair-market, run `python3 skills/altair-market/scripts/altair_market.py breadth`, `breadth --days 5` and `indicators SPX NDX SOX` against the live server.
 - If a change depends on a new server tool, merge only after the server change is deployed.
