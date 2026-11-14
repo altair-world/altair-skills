@@ -1,6 +1,6 @@
 {
   "name": "altair",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Read and compare published research on US stocks and ETFs, plus market breadth and factor indicators, from Altair.",
   "author": {
     "name": "Altair AI",
@@ -48,6 +48,12 @@
       "review": {
         "test_cases": {
           "positive": [
+            {
+              "description": "Read Nasdaq-100 constituent breadth without substituting index totals.",
+              "prompt": "Show Altair's latest Nasdaq-100 constituent daily moves and SMA participation, including missing data.",
+              "tools_triggered": "get_nasdaq_breadth",
+              "expected_behavior": "State the snapshot's session, previous session, membership date, coverage and comparable counts. Preserve null changes and withheld percentages; explain that the latest session may still be open and membership is not point-in-time history. Include the informational disclaimer. An unsupported tool must be reported, never replaced with index totals."
+            },
             {
               "description": "Read individual-symbol indicators without substituting index data.",
               "prompt": "Show Altair's latest NVDA factor indicators and TD Sequential readings, with rules and sources.",
