@@ -128,6 +128,18 @@ def number(value):
     return "n/a" if value is None else "{:,.2f}".format(value)
 
 
+def data_warning(instrument):
+    warning = instrument.get("dataWarning")
+    if warning is not None and (not isinstance(warning, str) or not warning.strip()):
+        raise ToolError("invalid server response: dataWarning must be nonempty text or null")
+    return warning
+
+
+def warning_lines(instrument):
+    warning = data_warning(instrument)
+    return ["Data quality warning: " + cell(warning), ""] if warning else []
+
+
 def output(args, data, markdown):
     if args.json:
         print(json.dumps({
@@ -189,8 +201,10 @@ def indicators(args):
     ]
     for symbol in selected:
         index = by_symbol[symbol]
+        warning = warning_lines(index)
         out.extend(["## {} · reading date {} · {} · close {}".format(
             symbol, index["date"], cell(index["name"]), number(index["close"])), "",
+            *warning,
             "| Indicator | Value | Reading | Signal |", "| --- | --- | --- | --- |"])
         out.extend(indicator_row(indicator, indicator["readings"].get(symbol)) for indicator in data["indicators"])
         out.append("")
@@ -248,6 +262,7 @@ def ticker(args):
     out = [
         "# Altair ticker indicators · {} · reading date {}".format(args.symbol, instrument["date"]), "",
         "{} · close {}".format(cell(instrument["name"]), number(instrument["close"])), "",
+        *warning_lines(instrument),
         "Source: https://altairworld.com/indicators through the public MCP server {}. "
         "Not live quotes; the latest session can still be open and its close may not be final. "
         "Labels describe rules, not forecasts or buy/sell instructions. Shared macro readings are "
@@ -281,7 +296,7 @@ def alert_readings(symbols):
             if index is None:
                 failed.append((symbol, "No indicator data for {}".format(symbol)))
                 continue
-            read[symbol] = (index["date"], [(indicator, indicator["readings"].get(symbol)) for indicator in index_data["indicators"]])
+            read[symbol] = (index["date"], [(indicator, indicator["readings"].get(symbol)) for indicator in index_data["indicators"]], data_warning(index))
             continue
         try:
             data = call_tool("get_ticker_indicators", {"ticker": symbol})
@@ -290,7 +305,7 @@ def alert_readings(symbols):
             continue
         if data["instrument"]["symbol"] != symbol:
             raise ToolError("invalid server response: ticker does not match requested symbol")
-        read[symbol] = (data["instrument"]["date"], [(indicator, indicator["reading"]) for indicator in data["indicators"]])
+        read[symbol] = (data["instrument"]["date"], [(indicator, indicator["reading"]) for indicator in data["indicators"]], data_warning(data["instrument"]))
     return read, failed
 
 
@@ -299,15 +314,17 @@ def alerts(args):
     read, failed = alert_readings(symbols)
     if not read:
         raise ToolError("no symbol could be read: {}".format("; ".join("{}: {}".format(*item) for item in failed)))
-    if any(reading is not None and "previous" not in reading for _, rows in read.values() for _, reading in rows):
+    if any(reading is not None and "previous" not in reading for _, rows, _ in read.values() for _, reading in rows):
         raise ToolError("this server does not return previous-session readings yet; alerts need the updated "
                         "get_market_indicators and get_ticker_indicators tools")
     results = []
     for symbol in symbols:
         if symbol not in read:
             continue
-        date, rows = read[symbol]
+        date, rows, warning = read[symbol]
         result = {"symbol": symbol, "date": date, "turned": [], "backToNeutral": [], "noComparison": []}
+        if warning:
+            result["dataWarning"] = warning
         for indicator, reading in rows:
             entry = {"id": indicator["id"], "name": indicator["name"], "reading": reading}
             if reading is None or reading["previous"] is None:
@@ -323,9 +340,13 @@ def alerts(args):
         "An alert is a rule whose bullish/neutral/bearish label at the latest session differs from the previous "
         "session's. Values are from the last available close, not live quotes; during trading hours the latest "
         "session can still be open, so a change can reverse by the close. Labels describe rules, not forecasts or "
-        "buy/sell instructions; several rules are contrarian.".format(ENDPOINT), "",
-        "## Turned bullish or bearish", "",
+        "buy/sell instructions; several rules are contrarian. These are previous-session changes, "
+        "not the weekly email's five-session-held alerts.".format(ENDPOINT), "",
     ]
+    for result in results:
+        if result.get("dataWarning"):
+            out.extend(["Data quality warning ({}): {}".format(result["symbol"], cell(result["dataWarning"])), ""])
+    out.extend(["## Turned bullish or bearish", ""])
     turned = [(result["symbol"], entry) for result in results for entry in result["turned"]]
     if turned:
         out.extend(["| Symbol | Indicator | Was | Now | Reading |", "| --- | --- | --- | --- | --- |"])
