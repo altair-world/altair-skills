@@ -127,6 +127,8 @@ The Claude Code plugin installation above ships both skills. Or copy `skills/alt
 ```bash
 python3 skills/altair-market/scripts/altair_market.py breadth
 python3 skills/altair-market/scripts/altair_market.py breadth --days 5
+python3 skills/altair-market/scripts/altair_market.py nasdaq
+python3 skills/altair-market/scripts/altair_market.py nasdaq --json
 python3 skills/altair-market/scripts/altair_market.py indicators
 python3 skills/altair-market/scripts/altair_market.py indicators NDX SOX
 python3 skills/altair-market/scripts/altair_market.py ticker NVDA
@@ -144,6 +146,8 @@ Read-only market calls make at most three attempts total across temporary HTTP/n
 `ticker SYMBOL` reads latest-only indicators for one Yahoo Finance stock, ETF or other symbol, e.g. `NVDA`, `BRK-B` or `0700.HK` (case-insensitive), through the free read-only `get_ticker_indicators` tool. The request sends only that symbol. It preserves the instrument's session date, rules, sources and unavailable readings; it never substitutes index readings for missing stock implied volatility or variance risk premium. Shared macro readings are market context, not stock-specific measurements. Historical index evidence does not validate returns for this instrument. The latest session may still be open. A server without the tool returns an explicit error.
 
 `alerts [SYMBOL ...]` lists the indicator rules whose bullish/neutral/bearish label at the latest session differs from the previous session's: rules that turned bullish or bearish, rules back at neutral, and rules with no reading at either session ("No comparison", which is unknown rather than unchanged). It defaults to SPX, NDX and SOX in one `get_market_indicators` call; other symbols (up to 10) are read one at a time through `get_ticker_indicators`. A symbol that fails is listed under "Unavailable symbols" and the command still exits 0; it exits 1 if none could be read, or if the server does not return previous-session readings yet. A changed label describes a rule, not a buy/sell instruction.
+
+`nasdaq` calls the free, read-only `get_nasdaq_breadth {}` tool for the latest Nasdaq-100 constituent snapshot: comparison sessions, membership date, priced/missing/comparable counts, advancers/unchanged/decliners, SMA20/SMA50 participation and each member's closes, changes and averages. It takes no symbol, history or date arguments. Markdown rounds display prices; JSON preserves precision and nulls. Counts must reconcile; percentages remain unavailable below 95% eligibility. The latest session may be open, and checked-in membership is not point-in-time history. An unsupported server fails explicitly, without substituting index totals. **Dependency:** deploy the AAI tool before merging/releasing this command. Use `ALTAIR_MCP_URL` for local/preview verification first. It sends an empty object and no credentials to the same free MCP endpoint.
 
 ### Data and security
 
