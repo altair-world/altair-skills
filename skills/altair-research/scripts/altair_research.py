@@ -9,7 +9,11 @@ Standard library only (Python 3.8+). No API key, no MCP client setup.
   python3 altair_research.py latest NVDA AAPL          # any covered ticker
   python3 altair_research.py latest SPY --date 2026-10-14
   python3 altair_research.py changes AAPL NVDA         # same-model rating changes
-  python3 altair_research.py report <url> [--section pm|analysts|research|trader|risk|full]
+  python3 altair_research.py report <url>              # the portfolio manager's final decision
+  python3 altair_research.py report <url> --section manager,pm   # debate verdict, then the decision
+
+Report sections: pm, manager, trader (short); market, sentiment, news, fundamentals (one analyst);
+bull, bear, aggressive, conservative, neutral (one debater); analysts, research, risk, full (large).
 
 Set ALTAIR_MCP_URL to an HTTPS deployment; HTTP is allowed only for localhost/127.0.0.1.
 """
@@ -40,13 +44,31 @@ HEADERS = {
     # The endpoint sits behind Cloudflare, which rejects the default Python-urllib agent.
     "User-Agent": "altair-research-skill/1.2",
 }
-SECTIONS = {
-    "analysts": "## I. ",
-    "research": "## II. ",
-    "trader": "## III. ",
-    "risk": "## IV. ",
-    "pm": "## V. ",
+# A report has five parts, each opened by one of these exact "## " title lines, and each part holds
+# a "### <Role>" block per role. Older reports can lack a part or a role.
+PARTS = {
+    "analysts": "I. Analyst Team Reports",
+    "research": "II. Research Team Decision",
+    "trader": "III. Trading Team Plan",
+    "risk": "IV. Risk Management Team Decision",
+    "pm": "V. Portfolio Manager Decision",
 }
+ROLES = {
+    "market": "Market Analyst",
+    "sentiment": "Sentiment Analyst",
+    "news": "News Analyst",
+    "fundamentals": "Fundamentals Analyst",
+    "bull": "Bull Researcher",
+    "bear": "Bear Researcher",
+    "manager": "Research Manager",
+    "aggressive": "Aggressive Analyst",
+    "conservative": "Conservative Analyst",
+    "neutral": "Neutral Analyst",
+}
+# The trader and the portfolio manager are the only roles in their parts, read as `trader` and `pm`;
+# their headings still end the block of the role before them.
+ROLE_HEADINGS = list(ROLES.values()) + ["Trader", "Portfolio Manager"]
+SECTION_NAMES = list(PARTS) + list(ROLES) + ["full"]
 
 
 class ToolError(Exception):
@@ -107,15 +129,27 @@ def call_tool(name, arguments):
     return json.loads(result["content"][0]["text"])
 
 
+def heading(level, titles):
+    """A whole heading line at this level with one of these exact titles."""
+    return r"^{} (?:{})\s*$".format("#" * level, "|".join(re.escape(title) for title in titles))
+
+
 def section(markdown, name):
+    """One part of a report, or one role's block inside a part."""
     if name == "full":
         return markdown
-    start = markdown.find(SECTIONS[name])
-    if start < 0:
+    # Only the report's own title lines are boundaries. Roles write headings of their own, some
+    # numbered "## I." or "## V." like the parts, and none of those may start or end a section.
+    parts = heading(2, PARTS.values())
+    if name in PARTS:
+        opening, closing = heading(2, [PARTS[name]]), parts
+    else:
+        opening, closing = heading(3, [ROLES[name]]), parts + "|" + heading(3, ROLE_HEADINGS)
+    start = re.search(opening, markdown, re.M)
+    if not start:
         return ""
-    following = [markdown.find(h, start + 1) for h in SECTIONS.values()]
-    end = min([i for i in following if i > start] or [len(markdown)])
-    return markdown[start:end].strip()
+    end = re.compile(closing, re.M).search(markdown, start.end())
+    return markdown[start.start():end.start() if end else len(markdown)].strip()
 
 
 def first_number(value):
@@ -158,8 +192,9 @@ def render_ticker(ticker, research, summary_chars):
         counts[row["rating"]] = counts.get(row["rating"], 0) + 1
     split = ", ".join("{} {}".format(n, rating) for rating, n in sorted(counts.items(), key=lambda kv: -kv[1]))
     lines = [
-        "## {} · analysis date {} · {} models: {}".format(
-            research["ticker"], research["date"], len(read), split or "none readable"),
+        "## {} · analysis date {} · {} {}: {}".format(
+            research["ticker"], research["date"], len(read), "model" if len(read) == 1 else "models",
+            split or "none readable"),
         "",
         "| Model | Rating | Close at report | Target | Target vs close | Confidence | Horizon |",
         "| --- | --- | --- | --- | --- | --- | --- |",
@@ -314,8 +349,17 @@ def tickers(args):
 def report(args):
     data = call_tool("read_research_report", {"url": args.url})
     print("# {} · {} · {}\n{}\n".format(data["ticker"], data["date"], data["model"], data["url"]))
-    print(section(data["markdown"], args.section) or "Section not found in this report.")
+    print("\n\n".join(section(data["markdown"], name) or "Section `{}` not found in this report.".format(name)
+                      for name in args.section))
     print("\nDisclaimer: " + DISCLAIMER)
+
+
+def section_names(value):
+    names = list(dict.fromkeys(name.strip() for name in value.lower().split(",") if name.strip()))
+    if not names or any(name not in SECTION_NAMES for name in names):
+        raise argparse.ArgumentTypeError("expected one or more of {}, comma-separated; got {!r}".format(
+            ", ".join(SECTION_NAMES), value))
+    return ["full"] if "full" in names else names
 
 
 def catalog_pages(value):
@@ -428,9 +472,10 @@ def main():
     changes_parser.add_argument("--date", type=analysis_date, help="analysis date YYYY-MM-DD instead of the newest")
     changes_parser.add_argument("--json", action="store_true", help="versioned JSON with decisions, comparisons and explicit errors")
     changes_parser.set_defaults(run=changes)
-    report_parser = commands.add_parser("report", help="one section of a report url from `latest`")
+    report_parser = commands.add_parser("report", help="one or more sections of a report url from `latest`")
     report_parser.add_argument("url")
-    report_parser.add_argument("--section", choices=list(SECTIONS) + ["full"], default="pm")
+    report_parser.add_argument("--section", type=section_names, default=["pm"], metavar="NAMES",
+                               help="comma-separated: {} (default: pm)".format(", ".join(SECTION_NAMES)))
     report_parser.set_defaults(run=report)
     args = parser.parse_args()
     if args.command in ("latest", "changes") and args.tickers and not normalize(args.tickers):
