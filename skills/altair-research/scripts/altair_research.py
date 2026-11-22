@@ -10,7 +10,8 @@ Standard library only (Python 3.8+). No API key, no MCP client setup.
   python3 altair_research.py latest SPY --date 2026-10-14
   python3 altair_research.py changes AAPL NVDA         # same-model rating changes
   python3 altair_research.py report <url>              # the portfolio manager's final decision
-  python3 altair_research.py report <url> --section manager,pm   # debate verdict, then the decision
+  python3 altair_research.py report <url> --section manager,pm   # research manager's verdict, then the decision
+  python3 altair_research.py report <url> --section research     # the whole bull/bear debate and its verdict
 
 Report sections: pm, manager, trader (short); market, sentiment, news, fundamentals (one analyst);
 bull, bear, aggressive, conservative, neutral (one debater); analysts, research, risk, full (large).
@@ -21,6 +22,7 @@ Set ALTAIR_MCP_URL to an HTTPS deployment; HTTP is allowed only for localhost/12
 import argparse
 import concurrent.futures
 import datetime
+import decimal
 import json
 import os
 import re
@@ -35,7 +37,7 @@ INDEX_TICKERS = ["SPY", "QQQ", "SOXX", "XBI"]
 WORKERS = 4
 ATTEMPTS = 3
 STALE_DAYS = 10
-SUMMARY_CHARS = 600
+SUMMARY_CHARS = 1500  # long enough for nearly every summary; a longer one ends with "…"
 DISCLAIMER = ("AI-generated reports for AI testing and experimentation only. They are not financial or "
               "investment advice and may contain errors; do not use them to make investment or trading decisions.")
 HEADERS = {
@@ -158,16 +160,23 @@ def first_number(value):
 
 
 def short(value, limit):
+    """Shorten to about `limit` characters, at a sentence end where one is near; a shortened value ends with "…"."""
     value = (value or "").strip()
     if len(value) <= limit:
         return value
     cut = value[:limit]
-    stop = cut.rfind(". ")
-    return cut[: stop + 1] if stop > limit // 2 else cut.rstrip() + "…"
+    stop = value.rfind(". ", 0, limit + 1)  # a sentence may end on the last character that fits
+    return cut[: stop + 1] + " …" if stop > limit // 2 else cut.rstrip() + "…"
 
 
 def money(value):
-    return "n/a" if value is None else "{:,.2f}".format(value)
+    # Round half up from the number as written, as the reports do: 59.555 is 59.56, not binary float's 59.55.
+    # Formatting, unlike quantize(), has no precision limit, so no value can raise here.
+    if value is None:
+        return "n/a"
+    with decimal.localcontext() as context:
+        context.rounding = decimal.ROUND_HALF_UP
+        return "{:,.2f}".format(decimal.Decimal(repr(value)))
 
 
 def lead(value, pattern):
@@ -196,7 +205,7 @@ def render_ticker(ticker, research, summary_chars):
             research["ticker"], research["date"], len(read), "model" if len(read) == 1 else "models",
             split or "none readable"),
         "",
-        "| Model | Rating | Close at report | Target | Target vs close | Confidence | Horizon |",
+        "| Model | Rating | Price at report | Target | Target vs price | Confidence | Horizon |",
         "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for row in read:
@@ -301,7 +310,8 @@ def changes(args):
                     rating = "unavailable" if value.get("error") else value.get("rating") or "rating not stated"
                     print("- {}: {} · {} · {}".format(label, value["date"], rating, value["url"]))
             print("")
-    print("No reason for a rating change is inferred. Read both reports for context.\n")
+    print("No reason for a rating change is inferred. Each report explains only its own rating; "
+          "to compare their reasons, run `report <url> --section manager,pm` on each report.\n")
     print("Disclaimer: " + DISCLAIMER)
     if failed == len(tickers):
         sys.exit(1)
@@ -321,13 +331,23 @@ def latest(args):
         "Source: https://altairworld.com/TradingAgents/ through the public MCP server {}. "
         "Each model runs the same multi-agent pipeline (analysts, bull/bear debate, trader, risk team, "
         "portfolio manager); rows are the portfolio manager's final decision. "
-        "\"Close at report\" is the report-time close, not a live quote.".format(ENDPOINT),
+        "\"Price at report\" is the price each report states: intraday or a close on the analysis date, or an "
+        "earlier session's close; most reports date it in the \"Price As Of\" line that opens their `market` "
+        "section. It is not a live quote.".format(ENDPOINT),
         "",
     ]
     for ticker, research in zip(tickers, researched):
         out.append(render_ticker(ticker, research, args.summary_chars))
-        if isinstance(research, dict) and (today - datetime.date.fromisoformat(research["date"])).days > STALE_DAYS:
-            out.append("> {} research is from {}, more than {} days old.\n".format(ticker, research["date"], STALE_DAYS))
+        if isinstance(research, dict):
+            age = (today - datetime.date.fromisoformat(research["date"])).days
+            if age >= STALE_DAYS:
+                out.append("> {} research is from {}, {} days old.\n".format(ticker, research["date"], age))
+            # Models publish on different days, so one model on the newest date hides the others' recent
+            # reports. A date picked with --date is not meant to hold every model.
+            if not args.date and len(research["decisions"]) == 1:
+                out.append("> Only {} has {} research for {}; other models' newest reports may be from earlier "
+                           "dates. Run `dates {}`.\n".format(research["decisions"][0]["model"], ticker,
+                                                             research["date"], ticker))
     out.append("Disclaimer: " + DISCLAIMER)
     print("\n".join(out))
     if all(isinstance(research, ToolError) for research in researched):
