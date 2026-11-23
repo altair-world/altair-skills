@@ -5,6 +5,7 @@ Standard library only (Python 3.8+). No API key, no MCP client setup.
 
   python3 altair_market.py breadth                   # latest index and sector breadth
   python3 altair_market.py breadth --days 5          # also show recent trading sessions
+  python3 altair_market.py nasdaq                   # latest Nasdaq-100 constituent snapshot
   python3 altair_market.py indicators                # SPX NDX SOX, including TD Sequential 9
   python3 altair_market.py indicators NDX SOX        # selected indices
   python3 altair_market.py ticker NVDA               # one Yahoo Finance symbol
@@ -17,6 +18,7 @@ Set ALTAIR_MCP_URL to an HTTPS deployment; HTTP is allowed only for localhost/12
 import argparse
 import datetime
 import json
+import math
 import os
 import re
 import sys
@@ -30,6 +32,7 @@ INDICES = {"SPX": ("S&P 500", "all"), "NDX": ("Nasdaq-100", "nasdaq100"),
            "SOX": ("PHLX Semiconductor", "sox")}
 ATTEMPTS = 3
 TEMPORARY_TOOL_ERRORS = {
+    "get_nasdaq_breadth": "Nasdaq-100 breadth is temporarily unavailable. Please try again later.",
     "get_market_breadth": "Market breadth is temporarily unavailable. Please try again later.",
     "get_market_indicators": "Market indicators are temporarily unavailable. Please try again later.",
     "get_ticker_indicators": "Ticker indicators are temporarily unavailable. Please try again later.",
@@ -218,6 +221,97 @@ def indicators(args):
     output(args, selected_data, out)
 
 
+def nasdaq_snapshot(data):
+    """Validate what the report relies on; never turn incomplete coverage into zero."""
+    def require(condition, label):
+        if not condition:
+            raise ToolError("invalid Nasdaq snapshot: " + label)
+
+    def count(value):
+        return type(value) is int and value >= 0
+
+    def numeric(value):
+        return type(value) in (int, float) and math.isfinite(value)
+
+    def date(value):
+        return isinstance(value, str) and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) and datetime.date.fromisoformat(value)
+
+    require(data["index"] == "Nasdaq-100", "wrong index")
+    for key in ("date", "membersAsOf"):
+        require(date(data[key]), key)
+    prior = data["previousDate"]
+    require(prior is None or (date(prior) and prior < data["date"]), "previousDate")
+    for key in ("generatedAt", "asOf"):
+        require((key == "asOf" and data[key] is None) or isinstance(data[key], str), key)
+    for key in ("constituents", "priced", "compared", "missing", "uncompared", "advancing", "unchanged", "declining"):
+        require(count(data[key]), key)
+    stocks = data["stocks"]
+    require(isinstance(stocks, list) and len(stocks) == data["constituents"] > 0, "constituent rows")
+    symbols = set()
+    priced = compared = advancing = unchanged = declining = 0
+    for stock in stocks:
+        symbol = stock["symbol"]
+        require(isinstance(symbol, str) and bool(symbol.strip()) and symbol not in symbols, "unique symbols")
+        symbols.add(symbol)
+        for key in ("close", "previousClose", "change", "changePercent", "sma20", "sma50"):
+            value = stock[key]
+            require(value is None or (numeric(value) and (key in ("change", "changePercent") or value > 0)), symbol + " " + key)
+        close, previous = stock["close"], stock["previousClose"]
+        has_pair = close is not None and previous is not None
+        require((stock["change"] is not None) == has_pair and (stock["changePercent"] is not None) == has_pair, symbol + " comparison nulls")
+        require(prior is not None or previous is None, symbol + " prior session")
+        require(close is not None or (stock["sma20"] is None and stock["sma50"] is None), symbol + " missing close")
+        priced += close is not None
+        if has_pair:
+            change = close - previous
+            require(math.isclose(stock["change"], change, rel_tol=1e-9, abs_tol=1e-9), symbol + " change")
+            require(math.isclose(stock["changePercent"], change / previous * 100, rel_tol=1e-9, abs_tol=1e-9), symbol + " percent change")
+            compared += 1
+            advancing += change > 0
+            unchanged += change == 0
+            declining += change < 0
+    expected = dict(priced=priced, compared=compared, missing=len(stocks) - priced, uncompared=priced - compared,
+                    advancing=advancing, unchanged=unchanged, declining=declining)
+    require(all(data[key] == value for key, value in expected.items()), "coverage/count reconciliation")
+    for key in ("sma20", "sma50"):
+        summary = data[key]
+        eligible = sum(stock[key] is not None for stock in stocks)
+        require(count(summary["eligible"]) and summary["eligible"] == eligible, key + " eligibility")
+        require(count(summary["above"]) and summary["above"] <= eligible, key + " above count")
+        # The server owns the compensated-SMA boundary comparison; do not redo it
+        # using rounded closes. Validate its aggregate percentage and withholding.
+        expected_percent = math.floor(100 * summary["above"] / eligible + .5) if eligible and eligible >= len(stocks) * .95 else None
+        require(summary["percent"] is None if expected_percent is None else
+                type(summary["percent"]) is int and summary["percent"] == expected_percent, key + " coverage percentage")
+    return data
+
+
+def nasdaq(args):
+    data = nasdaq_snapshot(call_tool("get_nasdaq_breadth", {}))
+    out = ["# Altair Nasdaq-100 constituents · reading date " + data["date"], "",
+           "Previous session: {}. Membership as of {} (checked-in list, not point-in-time history).".format(
+               data["previousDate"] or "unavailable", data["membersAsOf"]), "",
+           "Snapshot generated {}. Quote timestamp: {}. These timestamps do not certify a final close. "
+           "The latest session may still be open; these are not live quotes.".format(data["generatedAt"], data["asOf"] or "unavailable"), "",
+           "Coverage: {priced}/{constituents} priced; {compared} compared; {uncompared} priced without comparison; {missing} missing. "
+           "Advancing {advancing}, unchanged {unchanged}, declining {declining}.".format(**data), "",
+           "| Average | Eligible | Above | Percent above |", "| --- | --- | --- | --- |"]
+    for key in ("sma20", "sma50"):
+        row = data[key]
+        out.append("| {} | {} | {} | {} |".format(key.upper(), row["eligible"], row["above"], percent(row["percent"])))
+    out.extend(["", "Percentages are withheld below 95% eligibility. Missing values are unavailable, never zero. "
+                "Changes compare only the two named sessions.", "",
+                "| Symbol | Close | Previous close | Change | Change % | SMA20 | SMA50 |",
+                "| --- | --- | --- | --- | --- | --- | --- |"])
+    for stock in data["stocks"]:
+        out.append("| {} | {} | {} | {} | {} | {} | {} |".format(cell(stock["symbol"]),
+            number(stock["close"]), number(stock["previousClose"]), number(stock["change"]),
+            "n/a" if stock["changePercent"] is None else number(stock["changePercent"]) + "%",
+            number(stock["sma20"]), number(stock["sma50"])))
+    out.extend(["", "Source: {} through the free get_nasdaq_breadth tool.".format(ENDPOINT), "", "Disclaimer: " + DISCLAIMER])
+    output(args, data, out)
+
+
 def indicator_row(indicator, reading):
     """One table row; a missing reading is unavailable, never zero."""
     if reading is None:
@@ -387,6 +481,8 @@ def main():
     breadth_parser = commands.add_parser("breadth", help="latest index and S&P 500 sector breadth")
     breadth_parser.add_argument("--days", type=session_count, help="also show 1–252 recent trading sessions")
     breadth_parser.set_defaults(run=breadth)
+    nasdaq_parser = commands.add_parser("nasdaq", help="latest Nasdaq-100 constituent prices, daily moves and SMA coverage")
+    nasdaq_parser.set_defaults(run=nasdaq)
     indicators_parser = commands.add_parser("indicators", help="factor indicators and daily/weekly TD Sequential 9")
     indicators_parser.add_argument("indices", nargs="*", type=index_symbol, metavar="INDEX",
                                    help="indices to display (default: SPX NDX SOX)")
@@ -398,7 +494,7 @@ def main():
     alerts_parser.add_argument("symbols", nargs="*", type=ticker_symbol, metavar="SYMBOL",
                                help="SPX, NDX, SOX or Yahoo Finance symbols (default: SPX NDX SOX)")
     alerts_parser.set_defaults(run=alerts)
-    for command in (breadth_parser, indicators_parser, ticker_parser, alerts_parser):
+    for command in (breadth_parser, nasdaq_parser, indicators_parser, ticker_parser, alerts_parser):
         command.add_argument("--json", action="store_true", help="versioned JSON with source values, dates and unavailable readings")
     args = parser.parse_args()
     if args.command == "alerts" and len(set(args.symbols)) > 10:

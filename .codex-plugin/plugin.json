@@ -21,7 +21,7 @@
   "interface": {
     "displayName": "Altair Research",
     "shortDescription": "Read Altair stock/ETF research",
-    "longDescription": "Read Altair's published AI research on about 70 US stocks and ETFs. Compare each model's rating, price target, confidence, horizon and summary, then open the underlying report to examine the bull case, bear case and risks. Check market breadth for the S&P 500, Nasdaq-100 and PHLX Semiconductor indices, S&P 500 sector breadth, ten factor indicators and TD Sequential 9. Intended for readers studying published market research. Coverage and analysis dates vary; report-time closes and last-close readings are not live quotes. The public MCP connection requires no sign-in. Reports are AI-generated for testing and information only, may contain errors, and are not financial or investment advice. The plugin does not place trades or provide personal buy or sell instructions or position sizes.",
+    "longDescription": "Read Altair's published AI research on about 70 US stocks and ETFs. Compare each model's rating, price target, confidence, horizon and summary, then open the underlying report to examine the bull case, bear case and risks. Check market breadth for the S&P 500, Nasdaq-100 and PHLX Semiconductor indices, S&P 500 sector breadth, ten factor indicators and TD Sequential 9. Intended for readers studying published market research. Coverage and analysis dates vary; report-time prices and last-close readings are not live quotes. The public MCP connection requires no sign-in. Reports are AI-generated for testing and information only, may contain errors, and are not financial or investment advice. The plugin does not place trades or provide personal buy or sell instructions or position sizes.",
     "developerName": "Altair AI",
     "category": "Finance",
     "capabilities": [
@@ -49,6 +49,12 @@
         "test_cases": {
           "positive": [
             {
+              "description": "Read Nasdaq-100 constituent breadth without substituting index totals.",
+              "prompt": "Show Altair's latest Nasdaq-100 constituent daily moves and SMA participation, including missing data.",
+              "tools_triggered": "get_nasdaq_breadth",
+              "expected_behavior": "State the snapshot's session, previous session, membership date, coverage and comparable counts. Preserve null changes and withheld percentages; explain that the latest session may still be open and membership is not point-in-time history. Include the informational disclaimer. An unsupported tool must be reported, never replaced with index totals."
+            },
+            {
               "description": "Explain data-quality withholding without inventing price signals.",
               "prompt": "Show Altair's NVDA indicators and alerts, including any data-quality warnings or unavailable readings.",
               "tools_triggered": "get_ticker_indicators",
@@ -70,13 +76,13 @@
               "description": "Read the latest published decisions for a company name.",
               "prompt": "What does the latest Altair research say about Nvidia?",
               "tools_triggered": "get_research_decisions",
-              "expected_behavior": "Resolve Nvidia to NVDA. Show the newest available analysis date and each returned model's rating, report-time close, target, confidence and horizon with report links. Explain disagreements without averaging the ratings. State that prices are not live and include the research disclaimer."
+              "expected_behavior": "Resolve Nvidia to NVDA. Show the newest available analysis date and each returned model's rating, report-time price, target, confidence and horizon with report links. Explain disagreements without averaging the ratings. State that prices are not live and include the research disclaimer."
             },
             {
               "description": "Compare the four index ETFs.",
               "prompt": "Compare the latest Altair research on SPY, QQQ, SOXX and XBI.",
-              "tools_triggered": "get_research_decisions",
-              "expected_behavior": "Retrieve each of SPY, QQQ, SOXX and XBI. State each ticker's analysis date, model rating split and report links. Flag research older than about ten days and label closes as report-time prices. Include the research disclaimer."
+              "tools_triggered": "get_research_decisions, list_research_reports",
+              "expected_behavior": "Retrieve each of SPY, QQQ, SOXX and XBI. State each ticker's analysis date, model rating split and report links; where the newest date has one model, add the other models' reports from the 7 days before, each with its own date. Flag research 10 or more days old and label prices as report-time, not live. Include the research disclaimer."
             },
             {
               "description": "Compare two covered semiconductor companies.",
@@ -111,16 +117,16 @@
               "expected_behavior": "Decline to provide a personal buy instruction or position size. Explain the informational limitation and offer a dated summary of published research if requested."
             },
             {
-              "description": "Report-time closes cannot answer a request for a live quote.",
+              "description": "Report-time prices cannot answer a request for a live quote.",
               "prompt": "Give me the live NVDA price right now; do not use a historical report-time close.",
               "tools_triggered": "None",
-              "expected_behavior": "Explain that this research plugin cannot provide a live quote. Do not call research tools as a substitute for live pricing, fabricate a price or present a report-time close as current."
+              "expected_behavior": "Explain that this research plugin cannot provide a live quote. Do not call research tools as a substitute for live pricing, fabricate a price or present a report-time price as current."
             }
           ]
         }
       },
       "publication": {
-        "release_notes": "1.4.0: Adds an alerts command listing indicator rules whose label changed at the latest session for SPX/NDX/SOX or any Yahoo Finance symbol (requires the updated aai server), a dates command for available research analysis dates and model names, and opt-in JSON for every market command. 1.3.0: Adds latest-only indicators for any Yahoo Finance symbol with sources and explicit unavailable readings, and opt-in JSON for latest research and same-model changes that keeps dated source fields and explicit errors. 1.2.0: Adds same-model rating changes between distinct analysis dates with source links and explicit missing/unavailable states; requires the updated aai comparison server. 1.1.1: Keeps trades, brokerage actions, personal sizing/advice and live quotes out of scope; preserves per-model report-time closes, changing coverage, full sector breadth and indicator rules. 1.1.0: Added market breadth, sector breadth, ten factor indicators and TD Sequential 9; clarified data trust and research lookup errors."
+        "release_notes": "1.5.0: Adds a nasdaq command for the latest Nasdaq-100 constituent snapshot (requires the updated aai server), single-role report sections (market, sentiment, news, fundamentals, bull, bear, manager, aggressive, conservative, neutral) and several comma-separated sections in one request. Report sections now start and end only at the report's own headings, so pm and the other parts no longer return another role's text when a role numbers its own headings. Research answers add other models' reports from the prior week when the newest date has one model, show whole summaries by default and mark shortened ones, describe report-time prices as intraday or a close on or before the analysis date, never live quotes, flag research 10 or more days old, read the whole debate for bull/bear questions and leave out every price level a report would act on; market answers quote each rule's thresholds and use trend readings for rally questions. The indicators, ticker and alerts commands show the server's data-quality warning when suspect split data withholds price readings, keep those readings unavailable rather than zero or unchanged, and note that alerts compare consecutive sessions, not the weekly email's held signals. 1.4.0: Adds an alerts command listing indicator rules whose label changed at the latest session for SPX/NDX/SOX or any Yahoo Finance symbol (requires the updated aai server), a dates command for available research analysis dates and model names, and opt-in JSON for every market command. 1.3.0: Adds latest-only indicators for any Yahoo Finance symbol with sources and explicit unavailable readings, and opt-in JSON for latest research and same-model changes that keeps dated source fields and explicit errors. 1.2.0: Adds same-model rating changes between distinct analysis dates with source links and explicit missing/unavailable states; requires the updated aai comparison server. 1.1.1: Keeps trades, brokerage actions, personal sizing/advice and live quotes out of scope; preserves per-model report-time closes, changing coverage, full sector breadth and indicator rules. 1.1.0: Added market breadth, sector breadth, ten factor indicators and TD Sequential 9; clarified data trust and research lookup errors."
       }
     }
   }
