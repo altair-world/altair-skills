@@ -58,6 +58,8 @@ class ChangesCompatibility(unittest.TestCase):
         self.assertIn(current["url"], result.stdout)
         self.assertIn(previous["url"], result.stdout)
         self.assertIn("Previous: 2026-10-14 · unavailable", result.stdout)
+        self.assertIn("No reason for a rating change is inferred. Each report explains only its own rating; to compare "
+                      "their reasons, run `report <url> --section manager,pm` on each report.", result.stdout)
         self.assertIn("not financial or investment advice", result.stdout)
 
 
