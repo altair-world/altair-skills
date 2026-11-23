@@ -49,17 +49,20 @@ class LatestNoteTests(unittest.TestCase):
         text = self.run_latest({"SPY": {"ticker": "SPY", "date": day, "decisions": [DECISION]}}, "SPY")
         self.assertIn("| Model | Rating | Price at report | Target | Target vs price | Confidence | Horizon |", text)
         self.assertIn("\"Price at report\" is the price each report states: intraday or a close on the analysis date, "
-                      "or an earlier session's close; most reports date it in the \"Price As Of\" line that opens "
-                      "their `market` section. It is not a live quote.", text)
+                      "or an earlier session's close. Nearly all reports from October 2026 on date it in the "
+                      "\"Price As Of\" line that opens their `market` section; older ones state it in their own "
+                      "words, if at all. It is not a live quote.", text)
         self.assertIn("> Only model-a has SPY research for {}; other models' newest reports may be from earlier "
                       "dates. Run `dates SPY`.".format(day), text)
         self.assertNotIn("days old", text)
 
     def test_summaries_print_whole_up_to_1500_characters_by_default(self):
-        whole = "Hold. " + "A" * 990
-        text = self.run_latest({"SPY": {"ticker": "SPY", "date": self.days_ago(2),
-                                        "decisions": [dict(DECISION, summary=whole)]}}, "SPY")
-        self.assertIn("- **model-a**: " + whole + "\n", text)
+        whole = "Hold. " + "A" * 1494  # exactly 1,500 characters
+        for summary, shown in ((whole, whole), (whole + "A", whole + "…")):
+            with self.subTest(length=len(summary)):
+                text = self.run_latest({"SPY": {"ticker": "SPY", "date": self.days_ago(2),
+                                                "decisions": [dict(DECISION, summary=summary)]}}, "SPY")
+                self.assertIn("- **model-a**: " + shown + "\n", text)
 
     def test_an_unreadable_second_model_still_counts_as_a_model(self):
         unreadable = {"model": "model-b", "url": "https://altairworld.com/other", "error": "Unavailable"}

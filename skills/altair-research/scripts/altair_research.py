@@ -332,8 +332,9 @@ def latest(args):
         "Each model runs the same multi-agent pipeline (analysts, bull/bear debate, trader, risk team, "
         "portfolio manager); rows are the portfolio manager's final decision. "
         "\"Price at report\" is the price each report states: intraday or a close on the analysis date, or an "
-        "earlier session's close; most reports date it in the \"Price As Of\" line that opens their `market` "
-        "section. It is not a live quote.".format(ENDPOINT),
+        "earlier session's close. Nearly all reports from October 2026 on date it in the \"Price As Of\" line "
+        "that opens their `market` section; older ones state it in their own words, if at all. "
+        "It is not a live quote.".format(ENDPOINT),
         "",
     ]
     for ticker, research in zip(tickers, researched):

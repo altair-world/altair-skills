@@ -47,6 +47,10 @@ jobs:
             "$python" "$script" latest SPY NVDA --summary-chars 120 | tee latest.md
             test "$(grep -c '^## [A-Z]* · analysis date' latest.md)" -eq 2
             if grep -q 'unavailable' latest.md; then exit 1; fi
+            url=$(grep -o 'https://altairworld.com/TradingAgents/[^)]*/complete_report/' latest.md | head -1)
+            "$python" "$script" report "$url" --section manager,pm | tee report.md
+            grep -q '^### Research Manager$' report.md
+            grep -q '^## V. Portfolio Manager Decision$' report.md
           done
 
       - name: Live market breadth and indicators on Python 3.8 and 3.13
